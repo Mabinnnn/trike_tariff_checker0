@@ -1,0 +1,381 @@
+.admin-container{
+  padding:40px;
+  background:#121212;
+  min-height:100vh;
+  color:white;
+  font-family: 'Inter', sans-serif;
+}
+
+.admin-title{
+  margin-bottom:25px;
+  font-size:28px;
+}
+
+/* FORM */
+
+.tariff-form{
+  display:flex;
+  flex-direction: column;
+  gap:15px;
+  margin-bottom:25px;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tariff-form input{
+  padding:10px;
+  border-radius:6px;
+  border:1px solid #444;
+  background:#2a2a2a;
+  color:white;
+  flex:1;
+  min-width:150px;
+}
+
+.tariff-form input:disabled {
+  background:#1a1a1a;
+  color:#888;
+}
+
+/* BUTTONS */
+
+.add-btn, .update-btn, .cancel-btn {
+  border:none;
+  padding:10px 20px;
+  border-radius:6px;
+  cursor:pointer;
+  font-weight:600;
+  transition: all 0.2s;
+}
+
+.add-btn {
+  background:#55ff55;
+  color:#000;
+}
+
+.update-btn {
+  background:#ffaa00;
+  color:#000;
+}
+
+.cancel-btn {
+  background:#666;
+  color:white;
+  margin-left:10px;
+}
+
+.add-btn:hover, .update-btn:hover, .cancel-btn:hover {
+  transform:scale(1.02);
+}
+
+.add-btn:disabled, .update-btn:disabled {
+  background:#444;
+  cursor:not-allowed;
+}
+
+.save-btn{
+  background:#3498db;
+  border:none;
+  padding:10px 16px;
+  border-radius:6px;
+  cursor:pointer;
+  font-weight:600;
+  color:white;
+}
+
+.form-btns {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* TABLE */
+
+.tariff-table{
+  width:100%;
+  border-collapse:collapse;
+  background:#1e1e1e;
+}
+
+.tariff-table th{
+  background:#2a2a2a;
+}
+
+.tariff-table th,
+.tariff-table td{
+  padding:12px;
+  text-align:left;
+}
+
+.tariff-table tr{
+  border-bottom:1px solid #333;
+}
+
+/* ACTION BUTTONS */
+
+.edit-btn{
+  background:#f39c12;
+  border:none;
+  padding:6px 10px;
+  margin-right:5px;
+  color:white;
+  cursor:pointer;
+  border-radius:4px;
+}
+
+.delete-btn{
+  background:#e74c3c;
+  border:none;
+  padding:6px 10px;
+  color:white;
+  cursor:pointer;
+  border-radius:4px;
+}
+
+.empty{
+  text-align:center;
+  padding:20px;
+  color:#aaa;
+}
+
+/* Logout Button Container */
+.logout-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+/* Logout Button Style */
+.logout-btn {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+/* Hover effect */
+.logout-btn:hover {
+  background-color: #c0392b;
+  transform: scale(1.05);
+}
+
+/* Login Form */
+.login-form {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 30px;
+  background: #1e1e1e;
+  border-radius: 10px;
+}
+
+.login-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.login-form input {
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: white;
+  font-size: 14px;
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.login-btn {
+  background:#3498db;
+  border:none;
+  padding:12px;
+  border-radius:6px;
+  cursor:pointer;
+  font-weight:600;
+  color:white;
+  font-size:16px;
+  transition: background 0.2s;
+}
+
+.login-btn:hover {
+  background:#2980b9;
+}
+
+.login-btn:disabled {
+  background:#555;
+  cursor:not-allowed;
+}
+
+.login-hint {
+  margin-top: 15px;
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
+
+.error-message {
+  color: #e74c3c;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Login Modal Styles */
+.login-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.login-modal {
+  background: #1e1e1e;
+  padding: 40px;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.login-modal-title {
+  text-align: center;
+  margin-bottom: 30px;
+  color: white;
+  font-size: 24px;
+}
+
+.login-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.login-modal-form input {
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: white;
+  font-size: 14px;
+}
+
+.login-modal-form input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.success-message {
+  background: #27ae60;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* ----------------- MOBILE VIEW ----------------- */
+@media screen and (max-width: 768px) {
+  .admin-container {
+    padding: 20px;
+  }
+
+  .admin-title {
+    font-size: 22px;
+    text-align: center;
+  }
+
+  /* Form */
+  .tariff-form {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .tariff-form input {
+    width: 95%;
+  }
+
+  .form-btns {
+    flex-direction: column;
+  }
+
+  .form-btns button {
+    width: 100%;
+  }
+
+  .cancel-btn {
+    margin-left: 0;
+    margin-top: 10px;
+  }
+  
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .tariff-table {
+    width: 100%;
+    min-width: 600px;
+  }
+
+  .tariff-table th,
+  .tariff-table td {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  /* Action buttons smaller */
+  .edit-btn,
+  .delete-btn {
+    padding: 5px 8px;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  /* Logout button centered */
+  .logout-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 15px;
+  }
+
+  .logout-btn {
+    width: 21%;
+  }
+
+  .login-form {
+    margin: 20px;
+    padding: 20px;
+  }
+}
