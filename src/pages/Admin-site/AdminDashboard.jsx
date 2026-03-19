@@ -209,56 +209,50 @@ export default function AdminDashboard() {
   };
 
   // ── pick up token from URL hash after OAuth redirect ─────────────────────
-  useEffect(() => {
-    const hash   = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const token  = params.get("access_token");
-    if (!token) return;
+useEffect(() => {
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  const token = params.get("access_token");
 
-    window.history.replaceState(null, "", window.location.pathname);
+  if (!token) return;
 
-    fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${token}` },
+  window.history.replaceState(null, "", window.location.pathname);
+
+  fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      const email = (data.email || "").toLowerCase().trim();
+
+      // ✅ ADD ALL ADMINS HERE
+      const ALLOWED_ADMINS = [
+        "estrabelaedison8@gmail.com",
+        "marvinlarosa28@gmail.com"
+      ];
+
+      if (ALLOWED_ADMINS.includes(email)) {
+
+        setGmailToken(token);
+        setGmailUser(data.email);
+        setGmailError("");
+        setIsLoggedIn(true);
+
+      } else {
+
+        setGmailError(
+          `⛔ Access denied. "${data.email}" is not an authorized admin account.`
+        );
+
+        setGmailToken(null);
+        setGmailUser("");
+      }
     })
-      .then((r) => r.json())
-      .then(async (data) => {
-        const email = (data.email || "").toLowerCase().trim();
+    .catch(() => {
+      setGmailError("❌ Could not verify Gmail account. Please try again.");
+    });
 
-        // Ask the backend if an admin Gmail is already registered
-        const res        = await fetch(`${BACKEND_URL}/api/admin/settings/admin-gmail`);
-        const savedData  = await res.json();
-        const savedAdmin = savedData?.adminGmail?.toLowerCase().trim() || null;
-
-        if (!savedAdmin) {
-          // ✅ First time ever — save this Gmail as the admin in MongoDB
-          await fetch(`${BACKEND_URL}/api/admin/settings/admin-gmail`, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ adminGmail: email }),
-          });
-          setGmailToken(token);
-          setGmailUser(data.email);
-          setGmailError("");
-          setIsLoggedIn(true);
-        } else if (email === savedAdmin) {
-          // ✅ Matches the registered admin Gmail — grant access
-          setGmailToken(token);
-          setGmailUser(data.email);
-          setGmailError("");
-          setIsLoggedIn(true);
-        } else {
-          // ❌ Different Gmail — block access
-          setGmailError(
-            `⛔ Access denied. "${data.email}" is not the authorized admin account. Only the registered admin Gmail can log in.`
-          );
-          setGmailToken(null);
-          setGmailUser("");
-        }
-      })
-      .catch(() => {
-        setGmailError("❌ Could not verify Gmail account. Please try again.");
-      });
-  }, []);
+}, []);
 
   // ── send email via Gmail API ──────────────────────────────────────────────
   const handleSendEmail = async () => {
