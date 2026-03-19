@@ -197,7 +197,7 @@ export default function AdminDashboard() {
   // ── connect Gmail via OAuth ───────────────────────────────────────────────
   const connectGmail = () => {
     const clientId    = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const redirectUri = window.location.origin + window.location.pathname;
+    const redirectUri = "https://triketariffchecker0.vercel.app/admin-dashboard";
     const scope       = "https://www.googleapis.com/auth/gmail.send email profile";
     const authUrl     = `https://accounts.google.com/o/oauth2/v2/auth`
       + `?client_id=${encodeURIComponent(clientId)}`
