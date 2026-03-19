@@ -1,5 +1,5 @@
 const backendURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000" // ← fixed fallback;
-
+// ─── Authentication ───────────────────────────────────────────────
 // ─── Existing Routes ───────────────────────────────────────────────
 
 export const getRoutes = async () => {
