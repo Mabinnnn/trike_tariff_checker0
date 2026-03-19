@@ -56,6 +56,15 @@ export default function AdminDashboard() {
   const [editEmergency, setEditEmergency] = useState("");   // fares.emergency_provisional_php
   const [editDist,    setEditDist]    = useState("");
 
+  // ── add place modal state ─────────────────────────────────────────────────
+  const [showAddModal,  setShowAddModal]  = useState(false);
+  const [newPlace, setNewPlace] = useState({
+    name: "", category: "landmark", distance: "",
+    route: "", route_label: "", distance_km: "",
+    emergency: "",
+    tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
+  });
+
   // ── fetch places ──────────────────────────────────────────────────────────
   const fetchPlaces = async () => {
     setLoading(true);
@@ -183,6 +192,57 @@ export default function AdminDashboard() {
       }
     } catch {
       setMessage("❌ Error deleting place");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── add new place ─────────────────────────────────────────────────────────
+  const handleAddPlace = async () => {
+    if (!newPlace.name.trim()) {
+      setMessage("❌ Place name is required.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const tiers = {};
+      FARE_KEYS.forEach(({ key }) => {
+        const val = newPlace.tiers[key];
+        tiers[key] = val === "" || val === null ? null : parseFloat(val);
+      });
+      const payload = {
+        name: newPlace.name.trim(),
+        category: newPlace.category,
+        distance: newPlace.distance || null,
+        fares: {
+          route:       newPlace.route       || null,
+          route_label: newPlace.route_label || null,
+          distance_km: newPlace.distance_km ? parseFloat(newPlace.distance_km) : null,
+          emergency_provisional_php: newPlace.emergency === "" ? null : parseFloat(newPlace.emergency),
+          tiers,
+        },
+      };
+      const res  = await fetch(`${BACKEND_URL}/api/admin/places`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setPlaces((prev) => [...prev, data.place]);
+        setShowAddModal(false);
+        setNewPlace({
+          name: "", category: "landmark", distance: "",
+          route: "", route_label: "", distance_km: "",
+          emergency: "",
+          tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
+        });
+        setMessage(`✅ "${data.place.name}" added successfully!`);
+      } else {
+        setMessage(`❌ ${data.message}`);
+      }
+    } catch {
+      setMessage("❌ Error adding place. Check your backend.");
     } finally {
       setLoading(false);
     }
@@ -480,6 +540,21 @@ useEffect(() => {
             </p>
           </div>
 
+          {/* ── ADD PLACE BUTTON ────────────────────────────────────────── */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{
+                padding: "9px 20px", borderRadius: 8, border: "none",
+                background: "#22c55e", color: "#000",
+                fontWeight: 700, cursor: "pointer", fontSize: "0.9rem",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              ➕ Add New Place
+            </button>
+          </div>
+
           {/* ── FILTERS ─────────────────────────────────────────────────────── */}
           <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
             <input
@@ -740,6 +815,149 @@ useEffect(() => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── ADD PLACE MODAL ──────────────────────────────────────────────────── */}
+      {showAddModal && (
+        <div className="login-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
+          <div className="login-modal" style={{ maxWidth: 500, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <h3 style={{ marginBottom: 16, color: "#22c55e" }}>➕ Add New Place</h3>
+
+            {/* Name */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Place Name *</label>
+              <input
+                type="text"
+                value={newPlace.name}
+                onChange={(e) => setNewPlace((p) => ({ ...p, name: e.target.value }))}
+                placeholder="e.g. Barangay San Jose"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              />
+            </div>
+
+            {/* Category */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Category *</label>
+              <select
+                value={newPlace.category}
+                onChange={(e) => setNewPlace((p) => ({ ...p, category: e.target.value }))}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              >
+                <option value="landmark">Landmark</option>
+                <option value="zone">Zone</option>
+                <option value="barangay">Barangay</option>
+                <option value="sitio">Sitio</option>
+                <option value="food">Food</option>
+                <option value="hospital">Hospital</option>
+                <option value="government">Government</option>
+                <option value="market">Market</option>
+                <option value="school">School</option>
+                <option value="supermarket">Supermarket</option>
+                <option value="terminal">Terminal</option>
+                <option value="port">Port</option>
+                <option value="resort">Resort</option>
+              </select>
+            </div>
+
+            {/* Distance display */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Distance (display string)</label>
+              <input
+                type="text"
+                value={newPlace.distance}
+                onChange={(e) => setNewPlace((p) => ({ ...p, distance: e.target.value }))}
+                placeholder="e.g. 3.5 km"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              />
+            </div>
+
+            {/* Route info */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Route</label>
+                <input
+                  type="text"
+                  value={newPlace.route}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, route: e.target.value }))}
+                  placeholder="e.g. route-1"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Route Label</label>
+                <input
+                  type="text"
+                  value={newPlace.route_label}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, route_label: e.target.value }))}
+                  placeholder="e.g. Route 1"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Distance (km)</label>
+                <input
+                  type="number"
+                  value={newPlace.distance_km}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, distance_km: e.target.value }))}
+                  placeholder="e.g. 3.5"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            {/* Emergency fare */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#facc15", fontSize: "0.85rem", fontWeight: 600 }}>🚨 Emergency / Provisional Fare (₱)</label>
+              <input
+                type="number"
+                value={newPlace.emergency}
+                onChange={(e) => setNewPlace((p) => ({ ...p, emergency: e.target.value }))}
+                placeholder="null"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #facc15", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              />
+            </div>
+
+            {/* Fare tiers */}
+            <p style={{ color: "#aaa", fontSize: "0.85rem", marginBottom: 8 }}>⛽ Gasoline Fare Tiers (₱)</p>
+            {FARE_KEYS.map(({ key, label }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <label style={{
+                  color: isActiveCol(key) ? "#4ade80" : "#ccc",
+                  fontSize: "0.85rem", width: 160, flexShrink: 0,
+                  fontWeight: isActiveCol(key) ? 700 : 400,
+                }}>
+                  {label}
+                  {isActiveCol(key) && (
+                    <span style={{ marginLeft: 6, fontSize: "0.65rem", background: "#14532d", padding: "1px 6px", borderRadius: 8, border: "1px solid #22c55e" }}>
+                      ACTIVE
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  value={newPlace.tiers[key] ?? ""}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, tiers: { ...p.tiers, [key]: e.target.value } }))}
+                  placeholder="null"
+                  style={{
+                    flex: 1, padding: "6px 10px", borderRadius: 8,
+                    border:     isActiveCol(key) ? "1px solid #22c55e" : "1px solid #444",
+                    background: isActiveCol(key) ? "#0d1f13"           : "#1e1e1e",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button className="add-btn" onClick={handleAddPlace} disabled={loading} style={{ flex: 1 }}>
+                {loading ? "Saving..." : "💾 Save Place"}
+              </button>
+              <button className="cancel-btn" onClick={() => setShowAddModal(false)} style={{ flex: 1 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
