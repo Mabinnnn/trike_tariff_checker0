@@ -80,11 +80,34 @@ export default function Checkerpage() {
     places
       .map((p) => p.name)
       .filter((name) => name.toLowerCase().includes(value.toLowerCase()));
+  
+  const POBLACION_FLAT_FARE = 20;
+    const isPoblacion = (place) =>
+    place?.category?.toLowerCase() === "poblacion";
 
   // ── Fare lookup — base fare from route + multiplier applied ───────────────
   const getFareForRoute = (origin, destination) => {
     const destPlace = places.find((p) => p.name === destination);
     const origPlace = places.find((p) => p.name === origin);
+
+    if (isPoblacion(destPlace) || isPoblacion(origPlace)) {
+      const baseFare = POBLACION_FLAT_FARE;
+      return {
+        activeTier,
+        baseFare,
+        isPoblacionFlat: true,
+        sharingFare: applyMultiplier(baseFare, 1.00),
+        soloFare:    applyMultiplier(baseFare, 1.25),
+        nightFare:   applyMultiplier(baseFare, 2.50),
+        emergency_provisional_php: null,
+        "50-59": baseFare, "60-69": baseFare, "70-79": baseFare,
+        "80-89": baseFare, "90-99": baseFare,
+        route:       "Poblacion",
+        route_label: "Around Poblacion (Flat Rate)",
+        distance_km: null,
+        distance:    null,
+      };
+    }
 
     const farePlace = destPlace?.fares?.tiers ? destPlace
                     : origPlace?.fares?.tiers ? origPlace
