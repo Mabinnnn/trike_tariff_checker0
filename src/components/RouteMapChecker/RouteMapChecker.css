@@ -1,0 +1,400 @@
+/* ═══════════════════════════════════════════════════════════════
+   RouteMapChecker.css
+   Scoped under .rmc-wrapper — safe to drop into any page.
+   Inherits dark/light theme from parent via .rmc-dark / .rmc-light.
+═══════════════════════════════════════════════════════════════ */
+
+/* ── CSS variables ────────────────────────────────────────────── */
+.rmc-dark {
+  --rmc-bg:          rgba(255, 255, 255, 0.05);
+  --rmc-border:      rgba(255, 255, 255, 0.12);
+  --rmc-input-bg:    rgba(255, 255, 255, 0.08);
+  --rmc-input-color: #f1f5f9;
+  --rmc-label-color: #94a3b8;
+  --rmc-text:        #f1f5f9;
+  --rmc-list-bg:     #1e293b;
+  --rmc-list-hover:  #2d3f55;
+  --rmc-list-border: rgba(255, 255, 255, 0.1);
+  --rmc-section-color: rgba(255, 255, 255, 0.55);
+  --rmc-modal-bg:    #0f172a;
+  --rmc-modal-hdr:   #1e293b;
+  --rmc-chip-bg:     rgba(34, 197, 94, 0.15);
+  --rmc-chip-color:  #4ade80;
+  --rmc-chip-border: rgba(34, 197, 94, 0.3);
+}
+
+.rmc-light {
+  --rmc-bg:          rgba(0, 0, 0, 0.03);
+  --rmc-border:      rgba(0, 0, 0, 0.1);
+  --rmc-input-bg:    #fff;
+  --rmc-input-color: #1e293b;
+  --rmc-label-color: #64748b;
+  --rmc-text:        #1e293b;
+  --rmc-list-bg:     #fff;
+  --rmc-list-hover:  #f0fdf4;
+  --rmc-list-border: #e2e8f0;
+  --rmc-section-color: #64748b;
+  --rmc-modal-bg:    #fff;
+  --rmc-modal-hdr:   #f8fafc;
+  --rmc-chip-bg:     #dcfce7;
+  --rmc-chip-color:  #166534;
+  --rmc-chip-border: #bbf7d0;
+}
+
+/* ── wrapper ─────────────────────────────────────────────────── */
+.rmc-wrapper {
+  width: 100%;
+  background: var(--rmc-bg);
+  border: 1px solid var(--rmc-border);
+  border-radius: 14px;
+  padding: 18px 20px 20px;
+  margin-top: 18px;
+  box-sizing: border-box;
+}
+
+/* ── section label ───────────────────────────────────────────── */
+.rmc-section-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--rmc-section-color);
+  margin-bottom: 16px;
+}
+
+.rmc-map-icon { font-size: 15px; }
+
+/* ── field ───────────────────────────────────────────────────── */
+.rmc-field {
+  margin-bottom: 12px;
+}
+
+.rmc-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rmc-label-color);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── dot ─────────────────────────────────────────────────────── */
+.rmc-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rmc-dot--green { background: #22c55e; }
+.rmc-dot--red   { background: #ef4444; }
+
+/* ── dropdown wrapper ────────────────────────────────────────── */
+.rmc-dropdown-wrap {
+  position: relative;
+}
+
+/* ── input ───────────────────────────────────────────────────── */
+.rmc-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  border: 1.5px solid var(--rmc-border);
+  border-radius: 9px;
+  background: var(--rmc-input-bg);
+  color: var(--rmc-input-color);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.rmc-input:focus {
+  border-color: #22c55e;
+}
+
+.rmc-input::placeholder {
+  color: var(--rmc-label-color);
+  opacity: 0.7;
+}
+
+/* ── suggestion list ─────────────────────────────────────────── */
+.rmc-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--rmc-list-bg);
+  border: 1.5px solid var(--rmc-list-border);
+  border-radius: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 300;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.rmc-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--rmc-text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rmc-list-item:hover {
+  background: var(--rmc-list-hover);
+}
+
+/* ── category badge ──────────────────────────────────────────── */
+.rmc-cat-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.rmc-cat--landmark { background: #fef3c7; color: #92400e; }
+.rmc-cat--barangay { background: #dbeafe; color: #1e40af; }
+.rmc-cat--zone     { background: #d1fae5; color: #065f46; }
+
+/* ── validation message ──────────────────────────────────────── */
+.rmc-validation {
+  font-size: 12.5px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin: 4px 0 10px;
+}
+
+/* ── buttons ─────────────────────────────────────────────────── */
+.rmc-btn {
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  letter-spacing: 0.03em;
+  font-family: inherit;
+  margin-top: 8px;
+}
+
+.rmc-btn:active { transform: scale(0.98); }
+
+/* Done — matches the existing calculate-btn green style */
+.rmc-btn--done {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);
+}
+
+.rmc-btn--done:hover { opacity: 0.92; }
+
+/* View Route — slightly different shade so they're distinguishable */
+.rmc-btn--route {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+  animation: rmc-slide-in 0.25s ease;
+}
+
+.rmc-btn--route:hover { opacity: 0.92; }
+
+@keyframes rmc-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ══ MAP MODAL ═══════════════════════════════════════════════════ */
+
+/* overlay */
+.rmc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 15, 30, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: rmc-fade-in 0.2s ease;
+}
+
+@keyframes rmc-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* modal box */
+.rmc-modal {
+  background: var(--rmc-modal-bg);
+  border-radius: 18px;
+  overflow: hidden;
+  width: min(560px, 95vw);
+  height: min(580px, 90vh);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+  position: relative;
+  animation: rmc-pop-in 0.22s ease;
+}
+
+@keyframes rmc-pop-in {
+  from { opacity: 0; transform: scale(0.95) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* modal header */
+.rmc-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 16px;
+  background: var(--rmc-modal-hdr);
+  border-bottom: 1px solid var(--rmc-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.rmc-modal-route-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--rmc-text);
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.rmc-modal-place {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.rmc-arrow {
+  color: var(--rmc-label-color);
+  flex-shrink: 0;
+}
+
+/* chips */
+.rmc-chips { display: flex; gap: 6px; flex-shrink: 0; }
+
+.rmc-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--rmc-chip-bg);
+  color: var(--rmc-chip-color);
+  border: 1px solid var(--rmc-chip-border);
+  white-space: nowrap;
+}
+
+/* close button */
+.rmc-close-btn {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.rmc-close-btn:hover {
+  background: #dc2626;
+  transform: scale(1.08);
+}
+
+/* map */
+.rmc-map {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+/* loading overlay */
+.rmc-loading-overlay {
+  position: absolute;
+  inset: 52px 0 0 0; /* below header */
+  background: rgba(8, 15, 30, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 10;
+  color: #fff;
+  font-size: 13px;
+}
+
+.rmc-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: rmc-spin 0.75s linear infinite;
+}
+
+@keyframes rmc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* error banner */
+.rmc-error-banner {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1.5px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 10px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  z-index: 20;
+}
+
+/* ── scrollbar styling for list ──────────────────────────────── */
+.rmc-list::-webkit-scrollbar        { width: 6px; }
+.rmc-list::-webkit-scrollbar-track  { background: transparent; }
+.rmc-list::-webkit-scrollbar-thumb  { background: rgba(100, 116, 139, 0.35); border-radius: 99px; }

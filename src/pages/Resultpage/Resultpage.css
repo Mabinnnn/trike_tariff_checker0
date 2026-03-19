@@ -1,248 +1,486 @@
-/* WRAPPER */
-.result-page {
-    min-height: 100vh;
-    width: 100vw;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 60px 0; /* Updated to match Checkerpage padding */
-    font-family: "Segoe UI", sans-serif;
-    box-sizing: border-box;
-    transition: background 0.3s ease;
+/* =============================================
+   RESULT PAGE — matches Checkerpage layout
+   ============================================= */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-
-.result-page.dark-mode { 
-    background: radial-gradient(circle at top, #2a2a2a, #0d0d0d); 
-    color: #fff; 
-}
-
-.result-page.light-mode { 
-    background: radial-gradient(circle at top, #f5f5f5, #e0e0e0); 
-    color: #000; 
-}
-.location-result-text{
-    background-color: #111;
-    border-radius: 5px;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-
-
-.container {
-    width: 95%;
-    max-width: 1400px; 
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 40px;
-}
-
-/* HEADER SECTION */
-.header-section { 
-    text-align: center; 
-    width: 100%; 
-}
-
-.sun-icon-btn { 
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 200px;  
-    position: relative;  
-    top: 0;  
-}
-
-.brand-logo { 
-    width: 72px; 
-    height: auto; 
-    margin: 0 auto 10px;
-}
-
-.title-text { 
-    font-size: 42px; 
-    font-weight: 700; 
-    margin: 0; 
-}
-
-.subtitle-text { 
-    font-size: 20px; 
-    margin: 5px 0; 
-    opacity: 0.9; 
-}
-
-.dashed-line {
-    width: 240px;
-    height: 6px;
-    background: repeating-linear-gradient(
-        90deg,
-        #55ff55,
-        #55ff55 12px,
-        transparent 12px,
-        transparent 16px
-    );
-    margin: 12px auto 0;
-}
-
-/* CARD LAYOUT */
-.result-card-container {
-    width: 100%;
-    max-width: 500px;
-    background: #e0e0e0; /* Matches Checkerpage card background */
-    border-radius: 20px;
-    border: 4px solid #55ff55;
-    overflow: hidden;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-    margin: 0 auto;
-}
-
-.top-grey-area {
-    padding: 30px 40px 20px 40px;
-    display: flex;
-    justify-content: space-between;
-    gap: 15px;
-}
-
-.location-item { 
-    flex: 1; 
-    display: flex; 
-    flex-direction: column; 
-}
-
-.location-item label { 
-    font-size: 14px; 
-    font-weight: 700; 
-    color: #111; 
-    margin-bottom: 8px; 
-}
-
-.dark-placeholder-box { 
-    background: #3b3b3b; 
-    height: 40px; 
-    border-radius: 8px; 
-    width: 100%; 
-}
-
-/* GREEN AREA */
-.bottom-green-area {
-    background:#55ff55; /* Bright lime green from your reference image */
-    padding: 25px 40px 40px 40px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.calc-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #fff;
-    font-weight: 700;
-    font-size: 16px;
-    margin-bottom: 15px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.check-svg { 
-    font-size: 18px; 
-}
-
-.spin {
-    animation: spin 1s linear infinite;
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(0.9); }
+  65%  { transform: scale(1.03); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
-.loading-text {
-    font-size: 24px;
-    color: #888;
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
 }
 
-.fare-range {
-    font-size: 28px;
+/* ── Page wrapper ── */
+.result-page {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 16px 60px;
+  font-family: "Segoe UI", sans-serif;
+  box-sizing: border-box;
+  transition: background 0.3s ease;
 }
 
+.result-page.dark-mode  { background: radial-gradient(circle at top, #2a2a2a, #0d0d0d); color: #fff; }
+.result-page.light-mode { background: radial-gradient(circle at top, #f5f5f5, #e0e0e0); color: #000; }
+
+/* ── Main container ── */
+.container {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  box-sizing: border-box;
+}
+
+/* ── Header — floats on page bg, no box ── */
+.header-section {
+  text-align: center;
+  width: 100%;
+  padding: 0 8px 28px;
+  position: relative;
+  animation: fadeUp 0.35s ease both;
+}
+
+.sun-icon-btn {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.sun-icon-btn:hover { background: rgba(128,128,128,0.15); }
+
+.logo-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.brand-logo { width: 64px; height: auto; }
+
+.title-text {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.subtitle-text {
+  font-size: 0.87rem;
+  margin: 0;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.result-page.dark-mode  .title-text    { color: #fff; }
+.result-page.light-mode .title-text    { color: #111; }
+.result-page.dark-mode  .subtitle-text { color: #ccc; }
+.result-page.light-mode .subtitle-text { color: #555; }
+
+/* Green dashed accent — matches Checkerpage */
+.dashed-line {
+  width: 200px;
+  height: 5px;
+  background: repeating-linear-gradient(
+    90deg,
+    #4CAF50, #4CAF50 10px,
+    transparent 10px, transparent 14px
+  );
+  margin: 10px auto 0;
+  border-radius: 2px;
+  border: none;
+}
+
+/* ── Result Card — rounded card, same as Checkerpage form-body ── */
+.result-card-container {
+  width: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  animation: fadeUp 0.4s 0.1s ease both;
+}
+
+/* ── Top grey strip: origin + destination ── */
+.top-grey-area {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 22px 20px;
+}
+
+.result-page.dark-mode  .top-grey-area { background: #2b2b2b; }
+.result-page.light-mode .top-grey-area { background: #e4e4e4; }
+
+.location-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.location-item label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.5;
+  white-space: nowrap;
+}
+
+.result-page.dark-mode  .location-item label { color: #ddd; }
+.result-page.light-mode .location-item label { color: #333; }
+
+.location-result-text {
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+
+/* ── Green area — fare + buttons ── */
+.bottom-green-area {
+  background: #4CAF50;
+  padding: 24px 22px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* Tricycle Fare badge */
+.calc-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 7px 18px;
+  border-radius: 99px;
+}
+
+.check-svg { font-size: 13px; flex-shrink: 0; }
+
+/* Fare amount box */
 .fare-display-box {
-    background: #fff;
-    width: 85%;
-    padding: 15px 0;
-    border-radius: 12px;
-    text-align: center;
-    font-size: 44px;
-    font-weight: 900;
-    color: #1a1a1a;
-    margin-bottom: 25px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  background: #fff;
+  width: 100%;
+  padding: 20px 0;
+  border-radius: 16px;
+  text-align: center;
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: #1a1a1a;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: popIn 0.45s 0.2s ease both;
+  letter-spacing: -0.02em;
 }
 
-.peso-symbol { 
-    font-size: 28px; 
-    margin-right: 8px; 
-    color: #55ff55; /* Highlights the currency symbol */
+.fare-display-box.no-fare {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% auto;
+  animation: shimmer 1.8s linear infinite;
+  color: #999;
+  font-size: 1.3rem;
+  font-weight: 700;
 }
 
-/* BUTTONS */
-.button-group { 
-    display: flex; 
-    gap: 12px; 
-    width: 85%; 
+.peso-symbol {
+  font-size: 1.7rem;
+  margin-right: 2px;
+  color: #4CAF50;
+  font-weight: 900;
 }
 
-.btn-white, .btn-black {
-    flex: 1;
-    padding: 14px;
-    border: none;
-    border-radius: 10px;
-    font-weight: 800;
-    font-size: 15px;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
+.loading-text { font-size: 1rem; color: #888; }
+.spin         { animation: spin 1s linear infinite; }
+
+/* ── Buttons ── */
+.button-group {
+  display: flex;
+  gap: 10px;
+  width: 100%;
 }
 
-.btn-white { 
-    background: #fff; 
-    color: #111; 
+.btn-white,
+.btn-black,
+.btn-view-route {
+  flex: 1;
+  padding: 15px 10px;
+  border: none;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
-.btn-black { 
-    background: #1a1a1a; 
-    color: #fff; 
+.btn-view-route { background: #1a1a1a; color: #fff; }
+.btn-white      { background: #fff;    color: #111; }
+.btn-black      { background: #1a1a1a; color: #fff; }
+
+.btn-white:active,
+.btn-black:active,
+.btn-view-route:active {
+  transform: scale(0.96);
+  opacity: 0.85;
 }
 
-.btn-white:hover, .btn-black:hover { 
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+.btn-white:hover,
+.btn-black:hover,
+.btn-view-route:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
 }
 
-/* RESPONSIVE DESIGN */
-@media (max-width: 1024px) {
-    .title-text { font-size: 36px; }
-    .subtitle-text { font-size: 18px; }
+/* ── Fare note ── */
+.fare-note {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  margin-top: -12px;
+  margin-bottom: 14px;
+  font-style: italic;
 }
 
-@media (max-width: 768px) {
-    .result-card-container {
-        max-width: 360px;
-    }
-    .title-text { font-size: 28px; }
-    .subtitle-text { font-size: 16px; }
-    .top-grey-area, .bottom-green-area {
-        padding-left: 20px;
-        padding-right: 20px;
-    }
-    .fare-display-box, .button-group {
-        width: 100%;
-    }
+/* ==============================================
+   DESKTOP (≥ 768px) — wider, bigger text
+   ============================================== */
+@media (min-width: 768px) {
+
+  .result-page { padding: 60px 24px 80px; }
+
+  .container { max-width: 680px; }
+
+  .header-section { padding-bottom: 36px; }
+  .brand-logo      { width: 80px; }
+  .title-text      { font-size: 2.8rem; }
+  .subtitle-text   { font-size: 1rem; }
+  .dashed-line     { width: 240px; }
+  .sun-icon-btn    { right: 0; }
+
+  .result-card-container {
+    border-radius: 28px;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+  }
+
+  .top-grey-area        { padding: 28px 36px 24px; gap: 20px; }
+  .location-item label  { font-size: 0.78rem; }
+  .location-result-text { font-size: 0.95rem; padding: 12px 16px; min-height: 46px; }
+
+  .bottom-green-area { padding: 28px 36px 36px; }
+
+  .fare-display-box {
+    font-size: 4.2rem;
+    padding: 24px 0;
+    border-radius: 18px;
+    margin-bottom: 10px;
+  }
+
+  .fare-display-box.no-fare { font-size: 1.6rem; }
+  .peso-symbol               { font-size: 2.2rem; }
+  .calc-status               { font-size: 1rem; margin-bottom: 20px; }
+
+  .fare-note { margin-bottom: 20px; font-size: 0.8rem; }
+
+  .btn-white,
+  .btn-black,
+  .btn-view-route {
+    padding: 17px 14px;
+    font-size: 0.95rem;
+    border-radius: 14px;
+  }
+}
+/* ============================================================
+   RIDE LABEL + FARE BREAKDOWN TABLE
+   ============================================================ */
+
+/* Ride type label (e.g. "☀️ Sharing") shown above fare box */
+.result-ride-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px 14px;
+  border-radius: 99px;
+  margin: -6px 0 12px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Breakdown wrapper (sits below fare box) ──────────────── */
+.fare-breakdown-wrapper {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 16px;
+  padding: 14px 16px 12px;
+  box-sizing: border-box;
+  margin-bottom: 20px;
+}
+
+/* ── Table ─────────────────────────────────────────────────── */
+.fare-breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  color: #fff;
+}
+
+.fare-breakdown-table th {
+  text-align: left;
+  padding: 0 8px 8px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.5;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+.fare-breakdown-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Base fare row — slightly dimmed */
+.fare-breakdown-table .row-base td {
+  opacity: 0.8;
+}
+
+/* Surcharge row — amber tint */
+.fare-breakdown-table .row-surcharge td {
+  color: #ffe066;
+}
+
+/* Total row */
+.fare-breakdown-table .row-total td {
+  border-top: 1.5px solid rgba(255, 255, 255, 0.22);
+  border-bottom: none;
+  padding-top: 10px;
+  font-size: 0.85rem;
+}
+
+/* ── Inline tags ───────────────────────────────────────────── */
+.tag-increase {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: rgba(255, 200, 60, 0.22);
+  color: #ffe066;
+}
+
+.tag-base {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ── Route meta + emergency note ──────────────────────────── */
+.fare-route-meta {
+  margin-top: 10px;
+  font-size: 0.7rem;
+  opacity: 0.48;
+  text-align: center;
+  color: #fff;
+}
+
+.fare-emergency-note {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  text-align: center;
+  color: #ffcc44;
+  background: rgba(255, 200, 0, 0.12);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+
+/* ── Desktop tweaks ────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .fare-breakdown-wrapper {
+    padding: 16px 20px 14px;
+    border-radius: 18px;
+    margin-bottom: 24px;
+  }
+
+  .fare-breakdown-table {
+    font-size: 0.85rem;
+  }
+
+  .fare-breakdown-table th {
+    font-size: 0.7rem;
+    padding-bottom: 10px;
+  }
+
+  .fare-breakdown-table td {
+    padding: 9px 10px;
+  }
+
+  .fare-breakdown-table .row-total td {
+    font-size: 0.95rem;
+  }
+
+  .tag-increase,
+  .tag-base {
+    font-size: 0.74rem;
+    padding: 3px 10px;
+  }
+
+  .result-ride-label {
+    font-size: 0.88rem;
+    margin-bottom: 14px;
+  }
 }

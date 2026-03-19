@@ -1,84 +1,126 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Checkerpage.css";
-import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync } from "react-icons/fa";
+import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync, FaChevronDown } from "react-icons/fa";
 
 import logoWhite from "../../assets/Logowhite-removebg-preview.png";
 import logoBlack from "../../assets/Logoblack-removebg-preview.png";
 
-import { getRoutes } from "../../api/api";
+import { getAllPlaces } from "../../api/api";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+
+export const RIDE_TYPES = [
+  { value: "sharing", label: " Sharing (Sabay-sakay)",    multiplier: 1.00, increasePercent:   0 },
+  { value: "solo",    label: " Solo / Special (Mag-isa)", multiplier: 1.25, increasePercent:  25 },
+  { value: "night",   label: " Night (Gabi)",             multiplier: 2.50, increasePercent: 150 },
+];
+
+const applyMultiplier = (baseFare, multiplier) =>
+  baseFare != null ? Math.round(baseFare * multiplier) : null;
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Checkerpage() {
   const navigate = useNavigate();
 
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState("");
+  const [places, setPlaces]         = useState([]);
 
-  const [routes, setRoutes] = useState([]);
-  const [todaList, setTodaList] = useState([]);
-  const [locationList, setLocationList] = useState([]);
+  const [activeTier, setActiveTier] = useState("50-59");
 
-  const [originSaved, setOriginSaved] = useState(false);
-  const [destinationSaved, setDestinationSaved] = useState(false);
-  const [originButton, setOriginButton] = useState("");
+  const [originSaved, setOriginSaved]             = useState(false);
+  const [destinationSaved, setDestinationSaved]   = useState(false);
+  const [originButton, setOriginButton]           = useState("");
   const [destinationButton, setDestinationButton] = useState("");
-
-  const [originInput, setOriginInput] = useState("");
-  const [destinationInput, setDestinationInput] = useState("");
+  const [originInput, setOriginInput]             = useState("");
+  const [destinationInput, setDestinationInput]   = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState("");
-  const [editType, setEditType] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [modalType, setModalType]     = useState("");
+  const [searchTerm, setSearchTerm]   = useState("");
 
-  const [selectedToda, setSelectedToda] = useState("");
+  // ── Ride type selected by user ────────────────────────────────────────────
+  const [rideType, setRideType] = useState("sharing");
 
   useEffect(() => {
-    fetchRoutes();
+    Promise.all([fetchPlaces(), fetchActiveTier()]);
   }, []);
 
-  const fetchRoutes = async () => {
+  const fetchPlaces = async () => {
     setLoading(true);
     setError("");
     try {
-      const routeData = await getRoutes();
-      setRoutes(routeData);
-      const todas = [...new Set(routeData.map((r) => r.toda_name))];
-      setTodaList(todas);
-      const locations = [...new Set(routeData.map((r) => r.location))];
-      setLocationList(locations);
+      const data = await getAllPlaces();
+      setPlaces(data);
     } catch (err) {
-      console.error("Error fetching routes:", err);
+      console.error("Error fetching places:", err);
       setError("Cannot connect to server. Please try again later.");
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
-
-  const getLocationsForToda = (todaName) => {
-    if (!todaName) return locationList;
-    return routes.filter((r) => r.toda_name === todaName).map((r) => r.location);
+  const fetchActiveTier = async () => {
+    try {
+      const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`);
+      const data = await res.json();
+      if (data.status === "success" && data.activeTier) {
+        setActiveTier(data.activeTier);
+      }
+    } catch {
+      // silently keep default ("50-59")
+    }
   };
 
-  const getFareForRoute = (todaName, origin, destination) => {
-    const originRoute = routes.find((r) => r.toda_name === todaName && r.location === origin);
-    const destRoute = routes.find((r) => r.toda_name === todaName && r.location === destination);
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
-    if (originRoute && destRoute) {
-      const minFare = Math.min(originRoute.student_fare_min, destRoute.student_fare_min);
-      const maxFare = Math.max(originRoute.student_fare_max, destRoute.student_fare_max);
-      return { routeNo: destRoute.route_no, minFare, maxFare };
-    }
-    if (destRoute) return { routeNo: destRoute.route_no, minFare: destRoute.student_fare_min, maxFare: destRoute.student_fare_max };
-    if (originRoute) return { routeNo: originRoute.route_no, minFare: originRoute.student_fare_min, maxFare: originRoute.student_fare_max };
-    return null;
+  const filterPlaces = (value) =>
+    places
+      .map((p) => p.name)
+      .filter((name) => name.toLowerCase().includes(value.toLowerCase()));
+
+  // ── Fare lookup — base fare from route + multiplier applied ───────────────
+  const getFareForRoute = (origin, destination) => {
+    const destPlace = places.find((p) => p.name === destination);
+    const origPlace = places.find((p) => p.name === origin);
+
+    const farePlace = destPlace?.fares?.tiers ? destPlace
+                    : origPlace?.fares?.tiers ? origPlace
+                    : null;
+
+    if (!farePlace) return null;
+
+    const tiers    = farePlace.fares?.tiers ?? {};
+    const baseFare = tiers[activeTier] ?? null;
+
+    return {
+      activeTier,
+      baseFare,                                         // raw fare from DB
+
+      // Pre-calculated for all ride types (useful on result page)
+      sharingFare: applyMultiplier(baseFare, 1.00),
+      soloFare:    applyMultiplier(baseFare, 1.25),
+      nightFare:   applyMultiplier(baseFare, 2.50),
+
+      emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
+
+      "50-59": tiers["50-59"] ?? null,
+      "60-69": tiers["60-69"] ?? null,
+      "70-79": tiers["70-79"] ?? null,
+      "80-89": tiers["80-89"] ?? null,
+      "90-99": tiers["90-99"] ?? null,
+
+      route:       farePlace.fares?.route        ?? null,
+      route_label: farePlace.fares?.route_label  ?? farePlace.fares?.fare_basis ?? null,
+      distance_km: farePlace.fares?.distance_km  ?? null,
+      distance:    farePlace.distance            ?? null,
+    };
   };
 
   const handleCalculate = () => {
-    const finalOrigin = originSaved ? originButton : originInput;
+    const finalOrigin      = originSaved      ? originButton      : originInput;
     const finalDestination = destinationSaved ? destinationButton : destinationInput;
 
     if (!finalOrigin || !finalDestination) {
@@ -86,76 +128,57 @@ export default function Checkerpage() {
       return;
     }
 
-    const fareInfo = getFareForRoute(selectedToda, finalOrigin, finalDestination);
+    const routeData    = getFareForRoute(finalOrigin, finalDestination);
+    const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
+
+    const baseFare     = routeData?.baseFare ?? null;
+    const finalFare    = applyMultiplier(baseFare, selectedRide.multiplier);
+    const fareIncrease = (baseFare != null && finalFare != null)
+      ? finalFare - baseFare
+      : null;
+
+    const fareInfo = {
+      ...routeData,
+      // Ride-type fields
+      rideType,
+      rideLabel:       selectedRide.label,
+      multiplier:      selectedRide.multiplier,
+      increasePercent: selectedRide.increasePercent,
+      // Final computed fare (primary amount shown on result page)
+      finalFare,
+      fareIncrease,
+    };
 
     navigate("/result", {
-      state: {
-        origin: finalOrigin,
-        destination: finalDestination,
-        selectedToda: selectedToda,
-        routeNo: fareInfo ? fareInfo.routeNo : null,
-        fareMin: fareInfo ? fareInfo.minFare : null,
-        fareMax: fareInfo ? fareInfo.maxFare : null,
-      },
+      state: { origin: finalOrigin, destination: finalDestination, fareInfo },
     });
   };
 
-  const filterPlaces = (value, type) => {
-    if (type === "origin") {
-      if (!selectedToda) return [];
-      return getLocationsForToda(selectedToda).filter((p) =>
-        p.toLowerCase().includes(value.toLowerCase())
-      );
-    }
-    return locationList.filter((p) => p.toLowerCase().includes(value.toLowerCase()));
-  };
-
-  const openModal = (type) => {
-    setModalType(type);
-    setEditType("");
-    setSearchTerm("");
-    setIsModalOpen(true);
-  };
-
+  const openModal  = (type) => { setModalType(type); setSearchTerm(""); setIsModalOpen(true); };
   const closeModal = () => setIsModalOpen(false);
 
   const handleSetLocation = (loc) => {
-    const isOrigin =
-      modalType === "origin" || (modalType === "edit" && editType === "origin");
-    if (isOrigin) {
-      setOriginButton(loc);
-      setOriginSaved(true);
-    } else {
-      setDestinationButton(loc);
-      setDestinationSaved(true);
-    }
+    if (modalType === "origin") { setOriginButton(loc); setOriginSaved(true); }
+    else { setDestinationButton(loc); setDestinationSaved(true); }
     closeModal();
   };
 
   const handleOriginKeyDown = (e) => {
-    if (e.key === "Enter" && originInput) {
-      setOriginButton(originInput);
-      setOriginSaved(true);
-    }
+    if (e.key === "Enter" && originInput) { setOriginButton(originInput); setOriginSaved(true); }
   };
-
   const handleDestinationKeyDown = (e) => {
-    if (e.key === "Enter" && destinationInput) {
-      setDestinationButton(destinationInput);
-      setDestinationSaved(true);
-    }
+    if (e.key === "Enter" && destinationInput) { setDestinationButton(destinationInput); setDestinationSaved(true); }
   };
 
-  const isOriginModal =
-    modalType === "origin" || (modalType === "edit" && editType === "origin");
-  const filteredModalPlaces = filterPlaces(searchTerm, isOriginModal ? "origin" : "destination");
+  const filteredModalPlaces = filterPlaces(searchTerm);
+  const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
 
   if (loading) {
     return (
       <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
         <div className="loading-container">
           <FaSync className="spin" />
-          <p>Loading routes...</p>
+          <p>Loading places...</p>
         </div>
       </div>
     );
@@ -166,7 +189,7 @@ export default function Checkerpage() {
       <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
         <div className="loading-container">
           <p style={{ color: "red" }}>{error}</p>
-          <button onClick={fetchRoutes} style={{ marginTop: "12px", padding: "8px 20px", cursor: "pointer" }}>
+          <button onClick={fetchPlaces} style={{ marginTop: "12px", padding: "8px 20px", cursor: "pointer" }}>
             Retry
           </button>
         </div>
@@ -177,6 +200,7 @@ export default function Checkerpage() {
   return (
     <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
       <div className="tariff-container">
+
         {/* Header */}
         <div className="header-row">
           <div className="sun-icon-btn" onClick={toggleTheme}>
@@ -192,156 +216,153 @@ export default function Checkerpage() {
           <div className="dashed-line"></div>
         </div>
 
-        {/* TODA Selector */}
-        <div className="toda-section">
-          <label className="field-label">Piliin ang TODA:</label>
-          <select
-            className="toda-select"
-            value={selectedToda}
-            onChange={(e) => {
-              setSelectedToda(e.target.value);
-              setOriginSaved(false);
-              setOriginButton("");
-              setOriginInput("");
-              setDestinationSaved(false);
-              setDestinationButton("");
-              setDestinationInput("");
-            }}
-          >
-            <option value="">-- Pumili ng TODA --</option>
-            {todaList.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
+        {/* Green body panel */}
+        <div className="form-body">
 
-        {/* Origin */}
-        <div className="location-section">
-          <label className="field-label">
-            <FaMapMarkerAlt /> Pinagalingan (From):
-          </label>
-          {originSaved ? (
-            <div className="saved-location-row">
-              <div className="saved-location-box">
-                <FaCheckCircle className="check-icon" />
-                <span>{originButton}</span>
+          {/* ── Ride Type Dropdown ─────────────────────────────────────────── */}
+          <div className="location-section">
+            <label className="field-label">
+              Uri ng Biyahe (Ride Type):
+            </label>
+            <div className="ride-select-wrapper">
+              <select
+                className="ride-select"
+                value={rideType}
+                onChange={(e) => setRideType(e.target.value)}
+              >
+                {RIDE_TYPES.map((rt) => (
+                  <option key={rt.value} value={rt.value}>
+                    {rt.label}{rt.increasePercent > 0 ? `  (+${rt.increasePercent}%)` : "  (base fare)"}
+                  </option>
+                ))}
+              </select>
+              <FaChevronDown className="ride-select-arrow" />
+            </div>
+            {/* Live surcharge badge */}
+            <div className={`ride-badge ride-badge--${rideType}`}>
+              <span className="ride-badge__label">{selectedRide.label}</span>
+              <span className="ride-badge__pill">
+                {selectedRide.increasePercent === 0
+                  ? "Base fare — walang dagdag"
+                  : `+${selectedRide.increasePercent}% surcharge`}
+              </span>
+            </div>
+          </div>
+
+          {/* Origin */}
+          <div className="location-section">
+            <label className="field-label"><FaMapMarkerAlt /> Pinagalingan (From):</label>
+            {originSaved ? (
+              <div className="saved-location-row">
+                <div className="saved-location-box">
+                  <FaCheckCircle className="check-icon" />
+                  <span>{originButton}</span>
+                </div>
+                <button className="edit-location-btn" onClick={() => { setOriginSaved(false); setOriginButton(""); setOriginInput(""); }}>
+                  <FaEdit />
+                </button>
               </div>
-              <button
-                className="edit-location-btn"
-                onClick={() => {
-                  setOriginSaved(false);
-                  setOriginButton("");
-                  setOriginInput("");
-                }}
-              >
-                <FaEdit />
-              </button>
-            </div>
-          ) : (
-            <div className="input-row">
-              <input
-                type="text"
-                className="location-input"
-                placeholder={selectedToda ? "I-type ang pinagalingan..." : "Pumili muna ng TODA"}
-                value={originInput}
-                disabled={!selectedToda}
-                onChange={(e) => setOriginInput(e.target.value)}
-                onKeyDown={handleOriginKeyDown}
-              />
-              <button
-                className="pick-btn"
-                onClick={() => openModal("origin")}
-                disabled={!selectedToda}
-              >
-                Pumili
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Destination */}
-        <div className="location-section">
-          <label className="field-label">
-            <FaMapMarkerAlt /> Paroroonan (To):
-          </label>
-          {destinationSaved ? (
-            <div className="saved-location-row">
-              <div className="saved-location-box">
-                <FaCheckCircle className="check-icon" />
-                <span>{destinationButton}</span>
+            ) : (
+              <div className="input-row">
+                <input
+                  type="text"
+                  className="location-input"
+                  placeholder="I-type ang pinagalingan..."
+                  value={originInput}
+                  onChange={(e) => setOriginInput(e.target.value)}
+                  onKeyDown={handleOriginKeyDown}
+                />
+                <button className="pick-btn" onClick={() => openModal("origin")}>Pumili</button>
               </div>
-              <button
-                className="edit-location-btn"
-                onClick={() => {
-                  setDestinationSaved(false);
-                  setDestinationButton("");
-                  setDestinationInput("");
-                }}
-              >
-                <FaEdit />
-              </button>
-            </div>
-          ) : (
-            <div className="input-row">
-              <input
-                type="text"
-                className="location-input"
-                placeholder="I-type ang paroroonan..."
-                value={destinationInput}
-                onChange={(e) => setDestinationInput(e.target.value)}
-                onKeyDown={handleDestinationKeyDown}
-              />
-              <button className="pick-btn" onClick={() => openModal("destination")}>
-                Pumili
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Calculate Button */}
-        <button className="calculate-btn" onClick={handleCalculate}>
-          Kalkulahin ang Pamasahe
-        </button>
+          {/* Destination */}
+          <div className="location-section">
+            <label className="field-label"><FaMapMarkerAlt /> Paroroonan (To):</label>
+            {destinationSaved ? (
+              <div className="saved-location-row">
+                <div className="saved-location-box">
+                  <FaCheckCircle className="check-icon" />
+                  <span>{destinationButton}</span>
+                </div>
+                <button className="edit-location-btn" onClick={() => { setDestinationSaved(false); setDestinationButton(""); setDestinationInput(""); }}>
+                  <FaEdit />
+                </button>
+              </div>
+            ) : (
+              <div className="input-row">
+                <input
+                  type="text"
+                  className="location-input"
+                  placeholder="I-type ang paroroonan..."
+                  value={destinationInput}
+                  onChange={(e) => setDestinationInput(e.target.value)}
+                  onKeyDown={handleDestinationKeyDown}
+                />
+                <button className="pick-btn" onClick={() => openModal("destination")}>Pumili</button>
+              </div>
+            )}
+          </div>
+
+          {/* Calculate Button */}
+          <button className="calculate-btn" onClick={handleCalculate}>
+            Kalkulahin ang Pamasahe
+          </button>
+
+        </div>
       </div>
 
-      {/* Modal */}
+      {/* Pumili Modal */}
       {isModalOpen && (
         <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+          <div className={`modal-box ${isDarkMode ? "modal-dark" : "modal-light"}`} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-handle" />
+            <div className="modal-header-row">
+              <div className="modal-type-badge">
+                <FaMapMarkerAlt />
+                <span>{modalType === "origin" ? "Pinagalingan" : "Paroroonan"}</span>
+              </div>
+              <button className="modal-x-btn" onClick={closeModal}>✕</button>
+            </div>
             <h3 className="modal-title">
-              {isOriginModal ? "Piliin ang Pinagalingan" : "Piliin ang Paroroonan"}
+              {modalType === "origin" ? "Saan ka galing?" : "Saan ka pupunta?"}
             </h3>
-            <input
-              type="text"
-              className="modal-search"
-              placeholder="Maghanap ng lugar..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              autoFocus
-            />
+            <div className="modal-search-wrapper">
+              <FaMapMarkerAlt className="modal-search-icon" />
+              <input
+                type="text"
+                className="modal-search"
+                placeholder="Maghanap ng lugar..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+              />
+              {searchTerm && (
+                <button className="modal-search-clear" onClick={() => setSearchTerm("")}>✕</button>
+              )}
+            </div>
+            {searchTerm && (
+              <p className="modal-result-count">{filteredModalPlaces.length} lugar ang nahanap</p>
+            )}
             <div className="modal-list">
               {filteredModalPlaces.length === 0 ? (
-                <p className="modal-empty">
-                  {isOriginModal && !selectedToda
-                    ? "Pumili muna ng TODA"
-                    : "Walang nahanap na lugar"}
-                </p>
+                <div className="modal-empty-state">
+                  <span className="modal-empty-icon">🔍</span>
+                  <p>Walang nahanap na lugar</p>
+                  <span>Subukang ibang salita</span>
+                </div>
               ) : (
                 filteredModalPlaces.map((place) => (
-                  <button
-                    key={place}
-                    className="modal-item"
-                    onClick={() => handleSetLocation(place)}
-                  >
-                    <FaMapMarkerAlt className="modal-pin" />
-                    {place}
+                  <button key={place} className="modal-item" onClick={() => handleSetLocation(place)}>
+                    <span className="modal-item-icon"><FaMapMarkerAlt /></span>
+                    <span className="modal-item-name">{place}</span>
+                    <span className="modal-item-arrow">›</span>
                   </button>
                 ))
               )}
             </div>
-            <button className="modal-close-btn" onClick={closeModal}>
-              Isara
-            </button>
+            <button className="modal-close-btn" onClick={closeModal}>Isara</button>
           </div>
         </div>
       )}
