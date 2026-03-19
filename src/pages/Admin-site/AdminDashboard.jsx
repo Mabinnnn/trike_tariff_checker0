@@ -203,7 +203,8 @@ export default function AdminDashboard() {
       + `?client_id=${encodeURIComponent(clientId)}`
       + `&redirect_uri=${encodeURIComponent(redirectUri)}`
       + `&response_type=token`
-      + `&scope=${encodeURIComponent(scope)}`;
+      + `&scope=${encodeURIComponent(scope)}`
+      + `&prompt=select_account`;
     window.location.href = authUrl;
   };
 
