@@ -27,9 +27,6 @@ export default function AdminDashboard() {
 
   // ── auth ──────────────────────────────────────────────────────────────────
   const [isLoggedIn,  setIsLoggedIn]  = useState(false);
-  const [username,    setUsername]    = useState("");
-  const [password,    setPassword]    = useState("");
-  const [loginError,  setLoginError]  = useState("");
 
   // ── ui state ──────────────────────────────────────────────────────────────
   const [activeTab,   setActiveTab]   = useState("places");
@@ -41,6 +38,15 @@ export default function AdminDashboard() {
   const [activeTier,  setActiveTier]  = useState("50-59");
   const [tierSaving,  setTierSaving]  = useState(false);
 
+  // ── gmail state ───────────────────────────────────────────────────────────
+  const [gmailToken,    setGmailToken]    = useState(null);
+  const [gmailUser,     setGmailUser]     = useState("");
+  const [gmailError,    setGmailError]    = useState("");
+  const [emailTo,       setEmailTo]       = useState("");
+  const [emailSubject,  setEmailSubject]  = useState("");
+  const [emailBody,     setEmailBody]     = useState("");
+  const [emailSending,  setEmailSending]  = useState(false);
+
   // ── places state ──────────────────────────────────────────────────────────
   const [places,      setPlaces]      = useState([]);
   const [searchTerm,  setSearchTerm]  = useState("");
@@ -49,39 +55,6 @@ export default function AdminDashboard() {
   const [editTiers,   setEditTiers]   = useState({});       // fares.tiers
   const [editEmergency, setEditEmergency] = useState("");   // fares.emergency_provisional_php
   const [editDist,    setEditDist]    = useState("");
-
-  // ── login ─────────────────────────────────────────────────────────────────
-  const FALLBACK_CREDENTIALS = { username: "admin", password: "12345" };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoginError("");
-    setLoading(true);
-    try {
-      const res  = await fetch(`${BACKEND_URL}/api/admin/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await res.json();
-      if (data.status === "success") {
-        setIsLoggedIn(true);
-      } else {
-        setLoginError(data.message || "Login failed");
-      }
-    } catch {
-      if (
-        username === FALLBACK_CREDENTIALS.username &&
-        password === FALLBACK_CREDENTIALS.password
-      ) {
-        setIsLoggedIn(true);
-      } else {
-        setLoginError("Invalid credentials.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // ── fetch places ──────────────────────────────────────────────────────────
   const fetchPlaces = async () => {
@@ -217,8 +190,117 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
-    setUsername(""); setPassword("");
+    disconnectGmail();
     navigate("/");
+  };
+
+  // ── connect Gmail via OAuth ───────────────────────────────────────────────
+  const connectGmail = () => {
+    const clientId    = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = window.location.origin + window.location.pathname;
+    const scope       = "https://www.googleapis.com/auth/gmail.send email profile";
+    const authUrl     = `https://accounts.google.com/o/oauth2/v2/auth`
+      + `?client_id=${encodeURIComponent(clientId)}`
+      + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+      + `&response_type=token`
+      + `&scope=${encodeURIComponent(scope)}`;
+    window.location.href = authUrl;
+  };
+
+  // ── pick up token from URL hash after OAuth redirect ─────────────────────
+  useEffect(() => {
+    const hash   = window.location.hash;
+    const params = new URLSearchParams(hash.replace("#", "?"));
+    const token  = params.get("access_token");
+    if (!token) return;
+
+    window.history.replaceState(null, "", window.location.pathname);
+
+    fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then(async (data) => {
+        const email = (data.email || "").toLowerCase().trim();
+
+        // Ask the backend if an admin Gmail is already registered
+        const res        = await fetch(`${BACKEND_URL}/api/admin/settings/admin-gmail`);
+        const savedData  = await res.json();
+        const savedAdmin = savedData?.adminGmail?.toLowerCase().trim() || null;
+
+        if (!savedAdmin) {
+          // ✅ First time ever — save this Gmail as the admin in MongoDB
+          await fetch(`${BACKEND_URL}/api/admin/settings/admin-gmail`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ adminGmail: email }),
+          });
+          setGmailToken(token);
+          setGmailUser(data.email);
+          setGmailError("");
+          setIsLoggedIn(true);
+        } else if (email === savedAdmin) {
+          // ✅ Matches the registered admin Gmail — grant access
+          setGmailToken(token);
+          setGmailUser(data.email);
+          setGmailError("");
+          setIsLoggedIn(true);
+        } else {
+          // ❌ Different Gmail — block access
+          setGmailError(
+            `⛔ Access denied. "${data.email}" is not the authorized admin account. Only the registered admin Gmail can log in.`
+          );
+          setGmailToken(null);
+          setGmailUser("");
+        }
+      })
+      .catch(() => {
+        setGmailError("❌ Could not verify Gmail account. Please try again.");
+      });
+  }, []);
+
+  // ── send email via Gmail API ──────────────────────────────────────────────
+  const handleSendEmail = async () => {
+    if (!emailTo || !emailSubject || !emailBody) {
+      setMessage("❌ Please fill in all email fields.");
+      return;
+    }
+    setEmailSending(true);
+    try {
+      const raw = btoa(
+        `To: ${emailTo}\r\nSubject: ${emailSubject}\r\n\r\n${emailBody}`
+      ).replace(/\+/g, "-").replace(/\//g, "_");
+
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method:  "POST",
+        headers: {
+          Authorization:  `Bearer ${gmailToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ raw }),
+      });
+
+      if (res.ok) {
+        setMessage("✅ Email sent successfully!");
+        setEmailTo(""); setEmailSubject(""); setEmailBody("");
+      } else {
+        const err = await res.json();
+        setMessage(`❌ Failed to send email: ${err?.error?.message || "Token may have expired. Reconnect Gmail."}`);
+        if (res.status === 401) { setGmailToken(null); setGmailUser(""); }
+      }
+    } catch {
+      setMessage("❌ Error sending email.");
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // ── disconnect Gmail ──────────────────────────────────────────────────────
+  const disconnectGmail = () => {
+    setGmailToken(null);
+    setGmailUser("");
+    setGmailError("");
+    setEmailTo(""); setEmailSubject(""); setEmailBody("");
   };
 
   const filtered = places.filter((p) => {
@@ -240,15 +322,46 @@ export default function AdminDashboard() {
         <div className="login-modal-overlay">
           <div className="login-modal">
             <h2 className="login-modal-title">Admin Login</h2>
-            <form onSubmit={handleLogin} className="login-modal-form">
-              <input type="text"     placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
-              <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              {loginError && <p className="error-message">{loginError}</p>}
-              <button type="submit" className="login-btn" disabled={loading}>
-                {loading ? "Logging in..." : "Login"}
-              </button>
-            </form>
-            <p className="login-hint">Default: admin / 12345</p>
+            <p style={{ color: "#9ca3af", fontSize: "0.85rem", textAlign: "center", marginBottom: 24 }}>
+              Sign in with the authorized Gmail account to access the dashboard.
+            </p>
+
+            {/* ── Wrong Gmail error ── */}
+            {gmailError && (
+              <div style={{
+                background: "#3b0000", border: "1px solid #ef4444",
+                borderRadius: 8, padding: "12px 14px", marginBottom: 16,
+                color: "#fca5a5", fontSize: "0.82rem", lineHeight: 1.5,
+              }}>
+                {gmailError}
+                <br />
+                <button
+                  onClick={() => setGmailError("")}
+                  style={{
+                    marginTop: 8, padding: "4px 12px", borderRadius: 6,
+                    border: "1px solid #ef4444", background: "transparent",
+                    color: "#f87171", cursor: "pointer", fontSize: "0.78rem",
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={connectGmail}
+              style={{
+                width: "100%", padding: "12px", borderRadius: 8, border: "none",
+                background: "#4285F4", color: "#fff",
+                fontWeight: 700, cursor: "pointer", fontSize: "1rem",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+                <path fill="#fff" d="M44.5 20H24v8.5h11.7C34.2 33.6 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 2.9l6-6C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
+              </svg>
+              Sign in with Google
+            </button>
           </div>
         </div>
       </div>
@@ -259,7 +372,31 @@ export default function AdminDashboard() {
     <div className="admin-container">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 className="admin-title">Admin Dashboard</h1>
-        <button className="logout-btn" onClick={handleLogout}>Logout</button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <button
+            onClick={() => {
+              disconnectGmail();
+              setActiveTab("gmail");
+              setMessage("");
+            }}
+            title={gmailUser ? `Connected: ${gmailUser} — Click to switch` : "No Gmail connected"}
+            style={{
+              padding: "5px 14px", borderRadius: 7,
+              border: "1px solid #4285F4",
+              background: gmailToken ? "#1a2a4a" : "#1f2937",
+              color: gmailToken ? "#93c5fd" : "#6b7280",
+              cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+              <path fill={gmailToken ? "#93c5fd" : "#6b7280"} d="M44.5 20H24v8.5h11.7C34.2 33.6 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 2.9l6-6C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
+            </svg>
+            {gmailToken ? `Switch Gmail (${gmailUser})` : "Switch Gmail Acc"}
+          </button>
+          <button className="logout-btn" onClick={handleLogout}>Logout</button>
+        </div>
       </div>
 
       {message && <div className="success-message">{message}</div>}
@@ -274,6 +411,15 @@ export default function AdminDashboard() {
           }}
         >
           📍 Places & Fares
+        </button>
+        <button
+          onClick={() => { setActiveTab("gmail"); setGmailError(""); setMessage(""); }}
+          style={{
+            padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: activeTab === "gmail" ? "#22c55e" : "#333", color: "#fff", fontWeight: 600,
+          }}
+        >
+          📧 Send Email
         </button>
       </div>
 
@@ -485,6 +631,128 @@ export default function AdminDashboard() {
             </table>
           </div>
         </>
+      )}
+
+      {/* ── GMAIL TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === "gmail" && (
+        <div style={{ maxWidth: 540 }}>
+          <h2 style={{ color: "#22c55e", marginBottom: 4 }}>📧 Send Email</h2>
+          <p style={{ color: "#6b7280", fontSize: "0.8rem", marginBottom: 20 }}>
+            Only <strong style={{ color: "#e5e7eb" }}>{ALLOWED_ADMIN_GMAIL}</strong> is authorized to connect.
+          </p>
+
+          {/* ── Error: wrong Gmail ── */}
+          {gmailError && (
+            <div style={{
+              background: "#3b0000", border: "1px solid #ef4444",
+              borderRadius: 10, padding: "14px 18px", marginBottom: 20,
+              color: "#fca5a5", fontSize: "0.9rem", lineHeight: 1.5,
+            }}>
+              {gmailError}
+              <br />
+              <button
+                onClick={() => setGmailError("")}
+                style={{
+                  marginTop: 10, padding: "6px 14px", borderRadius: 6,
+                  border: "1px solid #ef4444", background: "transparent",
+                  color: "#f87171", cursor: "pointer", fontSize: "0.8rem",
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* ── Not connected ── */}
+          {!gmailToken && !gmailError && (
+            <div style={{
+              background: "#111827", border: "1px solid #374151",
+              borderRadius: 12, padding: "32px", textAlign: "center",
+            }}>
+              <p style={{ color: "#9ca3af", marginBottom: 20, fontSize: "0.9rem" }}>
+                Connect the authorized Gmail account to send emails from this dashboard.
+              </p>
+              <button
+                onClick={connectGmail}
+                style={{
+                  padding: "10px 28px", borderRadius: 8, border: "none",
+                  background: "#4285F4", color: "#fff",
+                  fontWeight: 700, cursor: "pointer", fontSize: "1rem",
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+                  <path fill="#fff" d="M44.5 20H24v8.5h11.7C34.2 33.6 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 2.9l6-6C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
+                </svg>
+                Connect Gmail Account
+              </button>
+            </div>
+          )}
+
+          {/* ── Connected — send form ── */}
+          {gmailToken && (
+            <div>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: "#052e16", border: "1px solid #22c55e",
+                borderRadius: 10, padding: "10px 16px", marginBottom: 20,
+              }}>
+                <span style={{ color: "#4ade80", fontSize: "0.88rem" }}>
+                  ✅ Connected as <strong>{gmailUser}</strong>
+                </span>
+                <button
+                  onClick={disconnectGmail}
+                  style={{
+                    padding: "4px 12px", borderRadius: 6,
+                    border: "1px solid #374151", background: "#1f2937",
+                    color: "#9ca3af", cursor: "pointer", fontSize: "0.75rem",
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: "0.8rem", display: "block", marginBottom: 4 }}>To</label>
+                  <input
+                    type="email" placeholder="recipient@email.com" value={emailTo}
+                    onChange={(e) => setEmailTo(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #374151", background: "#1e1e1e", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Subject</label>
+                  <input
+                    type="text" placeholder="Email subject" value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #374151", background: "#1e1e1e", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Message</label>
+                  <textarea
+                    placeholder="Write your message here..." value={emailBody} rows={7}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #374151", background: "#1e1e1e", color: "#fff", resize: "vertical", boxSizing: "border-box" }}
+                  />
+                </div>
+                <button
+                  onClick={handleSendEmail} disabled={emailSending}
+                  style={{
+                    padding: "11px", borderRadius: 8, border: "none",
+                    background: emailSending ? "#374151" : "#22c55e",
+                    color: emailSending ? "#9ca3af" : "#000",
+                    fontWeight: 700, cursor: emailSending ? "not-allowed" : "pointer",
+                    fontSize: "1rem", transition: "all 0.15s",
+                  }}
+                >
+                  {emailSending ? "⏳ Sending..." : "📤 Send Email"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── EDIT MODAL ───────────────────────────────────────────────────────── */}
