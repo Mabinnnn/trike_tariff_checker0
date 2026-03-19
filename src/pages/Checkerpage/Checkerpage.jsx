@@ -151,6 +151,21 @@ export default function Checkerpage() {
       return;
     }
 
+    const validPlaceNames = places.map((p) => p.name);
+    if (!validPlaceNames.includes(finalOrigin)) {
+      alert(`"${finalOrigin}" ay hindi kilalang lugar.\nMangyaring pumili mula sa listahan (Pumili button).`);
+      return;
+    }
+    if (!validPlaceNames.includes(finalDestination)) {
+      alert(`"${finalDestination}" ay hindi kilalang lugar.\nMangyaring pumili mula sa listahan (Pumili button).`);
+      return;
+    }
+
+    if (finalOrigin === finalDestination) {
+      alert("Hindi maaaring pareho ang Pinagalingan at Paroroonan.\nMangyaring pumili ng ibang lugar.");
+      return;
+    }
+
     const routeData    = getFareForRoute(finalOrigin, finalDestination);
     const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
 
