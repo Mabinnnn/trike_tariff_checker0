@@ -408,15 +408,7 @@ useEffect(() => {
         >
           📍 Places & Fares
         </button>
-        <button
-          onClick={() => { setActiveTab("gmail"); setGmailError(""); setMessage(""); }}
-          style={{
-            padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
-            background: activeTab === "gmail" ? "#22c55e" : "#333", color: "#fff", fontWeight: 600,
-          }}
-        >
-          📧 Send Email
-        </button>
+        
       </div>
 
       {activeTab === "places" && (
