@@ -154,8 +154,11 @@ export default function Checkerpage() {
     const routeData    = getFareForRoute(finalOrigin, finalDestination);
     const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
 
-    const baseFare     = routeData?.baseFare ?? null;
-    const finalFare    = applyMultiplier(baseFare, selectedRide.multiplier);
+    const baseFare = routeData?.baseFare ?? null;
+    const effectiveMultiplier =
+      routeData?.isPoblacionFlat && rideType !== "night" ? 1.00 : selectedRide.multiplier;
+
+    const finalFare    = applyMultiplier(baseFare, effectiveMultiplier);
     const fareIncrease = (baseFare != null && finalFare != null)
       ? finalFare - baseFare
       : null;
