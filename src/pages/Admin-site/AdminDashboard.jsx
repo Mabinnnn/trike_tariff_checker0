@@ -209,8 +209,8 @@ export default function AdminDashboard() {
 
   // ── pick up token from URL hash after OAuth redirect ─────────────────────
   useEffect(() => {
-    const hash   = window.location.hash;
-    const params = new URLSearchParams(hash.replace("#", "?"));
+    const hash   = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
     const token  = params.get("access_token");
     if (!token) return;
 
@@ -378,6 +378,7 @@ export default function AdminDashboard() {
               disconnectGmail();
               setActiveTab("gmail");
               setMessage("");
+              connectGmail();
             }}
             title={gmailUser ? `Connected: ${gmailUser} — Click to switch` : "No Gmail connected"}
             style={{
