@@ -55,14 +55,11 @@ export default function AdminDashboard() {
   const [editTiers,   setEditTiers]   = useState({});       // fares.tiers
   const [editEmergency, setEditEmergency] = useState("");   // fares.emergency_provisional_php
   const [editDist,    setEditDist]    = useState("");
-  const [editLat,     setEditLat]     = useState("");       // coords latitude
-  const [editLng,     setEditLng]     = useState("");       // coords longitude
 
   // ── add place modal state ─────────────────────────────────────────────────
   const [showAddModal,  setShowAddModal]  = useState(false);
   const [newPlace, setNewPlace] = useState({
     name: "", category: "landmark", distance: "",
-    lat: "", lng: "",
     route: "", route_label: "", distance_km: "",
     emergency: "",
     tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
@@ -140,8 +137,6 @@ export default function AdminDashboard() {
     });
     setEditEmergency(place.fares?.emergency_provisional_php ?? "");
     setEditDist(place.distance ?? "");
-    setEditLat(place.coords?.[1] ?? "");
-    setEditLng(place.coords?.[0] ?? "");
     setMessage("");
   };
 
@@ -165,11 +160,7 @@ export default function AdminDashboard() {
       const res  = await fetch(`${BACKEND_URL}/api/admin/places/${editPlace._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            fares: updatedFares,
-            distance: editDist || null,
-            coords: (editLat !== "" && editLng !== "") ? [parseFloat(editLng), parseFloat(editLat)] : editPlace.coords,
-          }),
+        body: JSON.stringify({ fares: updatedFares, distance: editDist || null }),
       });
       const data = await res.json();
       if (data.status === "success") {
@@ -223,7 +214,6 @@ export default function AdminDashboard() {
         name: newPlace.name.trim(),
         category: newPlace.category,
         distance: newPlace.distance || null,
-        coords: (newPlace.lat !== "" && newPlace.lng !== "") ? [parseFloat(newPlace.lng), parseFloat(newPlace.lat)] : undefined,
         fares: {
           route:       newPlace.route       || null,
           route_label: newPlace.route_label || null,
@@ -243,7 +233,6 @@ export default function AdminDashboard() {
         setShowAddModal(false);
         setNewPlace({
           name: "", category: "landmark", distance: "",
-    lat: "", lng: "",
           route: "", route_label: "", distance_km: "",
           emergency: "",
           tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
@@ -638,7 +627,6 @@ useEffect(() => {
                       )}
                     </th>
                   ))}
-                  <th>Coords</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -695,9 +683,6 @@ useEffect(() => {
                         );
                       })}
 
-                      <td style={{ fontSize: "0.75rem", color: "#6b7280", whiteSpace: "nowrap" }}>
-                        {place.coords ? `${place.coords[1].toFixed(5)}, ${place.coords[0].toFixed(5)}` : "—"}
-                      </td>
                       <td>
                         <button className="edit-btn"   onClick={() => openEdit(place)}>Edit</button>
                         <button className="delete-btn" onClick={() => handleDelete(place)}>Delete</button>
@@ -887,36 +872,6 @@ useEffect(() => {
               />
             </div>
 
-            {/* Coordinates */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600 }}>📍 Coordinates</label>
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={newPlace.lat}
-                    onChange={(e) => setNewPlace((p) => ({ ...p, lat: e.target.value }))}
-                    placeholder="e.g. 12.97340"
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={newPlace.lng}
-                    onChange={(e) => setNewPlace((p) => ({ ...p, lng: e.target.value }))}
-                    placeholder="e.g. 123.52690"
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
-                  />
-                </div>
-              </div>
-              <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>Saved as [longitude, latitude] in MongoDB Atlas</p>
-            </div>
-
             {/* Route info */}
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1 }}>
@@ -1034,38 +989,6 @@ useEffect(() => {
                 placeholder="e.g. 3.5 km"
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4 }}
               />
-            </div>
-
-            {/* Coordinates */}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600 }}>📍 Coordinates</label>
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={editLat}
-                    onChange={(e) => setEditLat(e.target.value)}
-                    placeholder="e.g. 12.97340"
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={editLng}
-                    onChange={(e) => setEditLng(e.target.value)}
-                    placeholder="e.g. 123.52690"
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
-                  />
-                </div>
-              </div>
-              <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>
-                MongoDB stores as [longitude, latitude]. Current: {editPlace?.coords ? `[${editPlace.coords[0]}, ${editPlace.coords[1]}]` : "none"}
-              </p>
             </div>
 
             {/* Emergency provisional fare */}
