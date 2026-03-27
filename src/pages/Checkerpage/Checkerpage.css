@@ -699,6 +699,7 @@
     display: flex; flex-direction: column; gap: 20px;
     border-radius: 24px;
     box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+    min-height: 420px;
   }
 
   .form-body .location-section { gap: 10px; }
@@ -794,6 +795,10 @@
   border-radius: 10px;
   font-size: 0.8rem;
   margin-top: 4px;
+  min-height: 36px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .ride-badge__label { font-weight: 600; }
