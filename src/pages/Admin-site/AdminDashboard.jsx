@@ -588,7 +588,7 @@ useEffect(() => {
           </div>
 
           {/* ── PLACES TABLE ────────────────────────────────────────────────── */}
-          <div style={{ overflowX: "auto", minHeight: "400px" }}>
+          <div style={{ overflowX: "auto", minHeight: "500px", display: "flex", flexDirection: "column" }}>
             <table className="tariff-table">
               <thead>
                 <tr>

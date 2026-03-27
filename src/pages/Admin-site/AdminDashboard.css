@@ -100,6 +100,12 @@
   width:100%;
   border-collapse:collapse;
   background:#1e1e1e;
+  table-layout: fixed;
+}
+
+.tariff-table tbody {
+  display: table-row-group;
+  min-height: 300px;
 }
 
 .tariff-table th{
@@ -110,6 +116,9 @@
 .tariff-table td{
   padding:12px;
   text-align:left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tariff-table tr{
