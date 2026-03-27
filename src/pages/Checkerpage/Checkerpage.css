@@ -671,9 +671,9 @@
   /* One seamless card — header + green form-body, no gap */
   .tariff-page > .tariff-container,
   .tariff-container {
-    width: 680px;
-    min-width: 680px;
-    max-width: 680px;
+    width: 560px;
+    min-width: 560px;
+    max-width: 560px;
     padding: 0; gap: 0 !important;
     border-radius: 24px; overflow: hidden;
     background: transparent; box-shadow: none;
