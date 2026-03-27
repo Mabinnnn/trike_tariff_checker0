@@ -19,11 +19,17 @@ export const getFare = async (routeNo) => {
 
 // ─── Places (from MongoDB) ─────────────────────────────────────────
 
-// GET all places
+// GET all places — uses same endpoint as admin so data shape (fares.tiers) always matches
 export const getAllPlaces = async () => {
-  const res = await fetch(`${backendURL}/api/places`);
+  const res = await fetch(`${backendURL}/api/admin/places`);
   if (!res.ok) throw new Error("Failed to fetch places");
-  return res.json();
+  const data = await res.json();
+  // Admin endpoint returns { status, places: [...] }; public endpoint returns array directly.
+  // Handle both shapes so this works regardless of backend version.
+  if (data && data.status === "success" && Array.isArray(data.places)) {
+    return data.places;
+  }
+  return Array.isArray(data) ? data : [];
 };
 
 // GET places filtered by category (landmark | zone | barangay | sitio)

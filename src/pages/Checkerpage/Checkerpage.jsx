@@ -13,7 +13,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 export const RIDE_TYPES = [
   { value: "sharing", label: " Sharing (Sabay-sakay)",    multiplier: 1.00, increasePercent:   0 },
   { value: "solo",    label: " Solo / Special (Mag-isa)", multiplier: 1.25, increasePercent:  25 },
-  { value: "night",   label: " Night (Gabi)",             multiplier: 2.50, increasePercent: 50 },
+  { value: "night",   label: " Night (Gabi)",             multiplier: 2.50, increasePercent: 150 },
 ];
 
 const applyMultiplier = (baseFare, multiplier) =>
@@ -31,7 +31,8 @@ export default function Checkerpage() {
   const [error, setError]           = useState("");
   const [places, setPlaces]         = useState([]);
 
-  const [activeTier, setActiveTier] = useState("50-59");
+  const [activeTier, setActiveTier] = useState(null);       // null = not yet loaded from server
+  const [tierLoading, setTierLoading] = useState(true);     // true while fetching active tier
 
   const [originSaved, setOriginSaved]             = useState(false);
   const [destinationSaved, setDestinationSaved]   = useState(false);
@@ -66,14 +67,19 @@ export default function Checkerpage() {
   };
 
   const fetchActiveTier = async () => {
+    setTierLoading(true);
     try {
       const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`);
       const data = await res.json();
       if (data.status === "success" && data.activeTier) {
         setActiveTier(data.activeTier);
+      } else {
+        setActiveTier("50-59"); // safe fallback if server returns unexpected shape
       }
     } catch {
-      // silently keep default ("50-59")
+      setActiveTier("50-59"); // safe fallback on network error
+    } finally {
+      setTierLoading(false);
     }
   };
 
@@ -99,8 +105,9 @@ export default function Checkerpage() {
 
     if (isPoblacion(destPlace) || isPoblacion(origPlace)) {
       const baseFare = POBLACION_FLAT_FARE;
+      const tierKey  = activeTier ?? "50-59";
       return {
-        activeTier,
+        activeTier: tierKey,
         baseFare,
         isPoblacionFlat: true,
         sharingFare: applyMultiplier(baseFare, 1.00),
@@ -123,16 +130,17 @@ export default function Checkerpage() {
     if (!farePlace) return null;
 
     const tiers    = farePlace.fares?.tiers ?? {};
-    const baseFare = tiers[activeTier] ?? null;
+    const tierKey  = activeTier ?? "50-59";       // activeTier is never null here (guarded by loading)
+    const baseFare = tiers[tierKey] ?? null;
 
     return {
-      activeTier,
+      activeTier: tierKey,
       baseFare,                                         // raw fare from DB
 
       // Pre-calculated for all ride types (useful on result page)
       sharingFare: applyMultiplier(baseFare, 1.00),
       soloFare:    applyMultiplier(baseFare, 1.25),
-      nightFare:   applyMultiplier(baseFare, 2.00),
+      nightFare:   applyMultiplier(baseFare, 2.50),
 
       emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
 
@@ -221,7 +229,7 @@ export default function Checkerpage() {
   const filteredModalPlaces = filterPlaces(searchTerm);
   const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
 
-  if (loading) {
+  if (loading || tierLoading) {
     return (
       <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
         <div className="loading-container">
