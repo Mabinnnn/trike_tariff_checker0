@@ -7,10 +7,17 @@ import trikeLogoWhite from "../../assets/Logowhite-removebg-preview.png";
 import "./Home.css";
 
 const Home = () => {
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem("trikeTheme");
+    return saved !== null ? saved === "dark" : true;
+  });
   const navigate = useNavigate(); 
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+  const toggleTheme = () => {
+    const next = !isDarkMode;
+    setIsDarkMode(next);
+    localStorage.setItem("trikeTheme", next ? "dark" : "light");
+  };
 
   return (
     <div className={`splash-container ${isDarkMode ? "dark-mode" : "light-mode"}`}>

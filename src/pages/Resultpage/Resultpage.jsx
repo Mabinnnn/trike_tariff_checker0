@@ -16,7 +16,10 @@ const TIER_LABELS = {
 };
 
 export default function Resultpage() {
-  const [isDarkMode,   setIsDarkMode]   = useState(true);
+  const [isDarkMode,   setIsDarkMode]   = useState(() => {
+    const saved = localStorage.getItem("trikeTheme");
+    return saved !== null ? saved === "dark" : true;
+  });
   const [showRouteMap, setShowRouteMap] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -27,7 +30,11 @@ export default function Resultpage() {
     fareInfo:    null,
   };
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+  const toggleTheme = () => {
+    const next = !isDarkMode;
+    setIsDarkMode(next);
+    localStorage.setItem("trikeTheme", next ? "dark" : "light");
+  };
   const handleDone  = () => navigate("/");
 
   // ── Fare values ────────────────────────────────────────────────────────────

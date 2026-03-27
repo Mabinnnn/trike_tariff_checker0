@@ -23,7 +23,10 @@ const applyMultiplier = (baseFare, multiplier) =>
 export default function Checkerpage() {
   const navigate = useNavigate();
 
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem("trikeTheme");
+    return saved !== null ? saved === "dark" : true;
+  });
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState("");
   const [places, setPlaces]         = useState([]);
@@ -74,7 +77,11 @@ export default function Checkerpage() {
     }
   };
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+  const toggleTheme = () => {
+    const next = !isDarkMode;
+    setIsDarkMode(next);
+    localStorage.setItem("trikeTheme", next ? "dark" : "light");
+  };
 
   const filterPlaces = (value) =>
     places
