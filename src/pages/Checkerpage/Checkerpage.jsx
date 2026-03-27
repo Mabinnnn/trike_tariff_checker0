@@ -100,16 +100,14 @@ export default function Checkerpage() {
 
   // ── Fare lookup — base fare from route + multiplier applied ───────────────
   const getFareForRoute = (origin, destination) => {
-    const origPlace = places.find(p => p.name === origin);
-    const destPlace = places.find(p => p.name === destination);
+    const destPlace = places.find((p) => p.name === destination);
+    const origPlace = places.find((p) => p.name === origin);
 
-    if (!origPlace || !destPlace) return null;
-
-    // ✅ Poblacion flat fare
-    if (isPoblacion(origPlace) && isPoblacion(destPlace)) {
+    // Flat ₱20 ONLY when BOTH ends are within Poblacion (intra-Poblacion short trip).
+    // If one place is outside Poblacion (e.g. Lajong barangay), fall through to real DB fares.
+    if (isPoblacion(destPlace) && isPoblacion(origPlace)) {
       const baseFare = POBLACION_FLAT_FARE;
       const tierKey  = activeTier ?? "50-59";
-
       return {
         activeTier: tierKey,
         baseFare,
@@ -117,48 +115,49 @@ export default function Checkerpage() {
         sharingFare: applyMultiplier(baseFare, 1.00),
         soloFare:    applyMultiplier(baseFare, 1.25),
         nightFare:   applyMultiplier(baseFare, 2.50),
+        emergency_provisional_php: null,
+        "50-59": baseFare, "60-69": baseFare, "70-79": baseFare,
+        "80-89": baseFare, "90-99": baseFare,
+        route:       "Poblacion",
+        route_label: "Around Poblacion (Flat Rate)",
+        distance_km: null,
+        distance:    null,
       };
     }
 
-    // 🔥 NEW: COMPUTE DISTANCE USING KM FROM DB
-    const distance = Math.abs(origPlace.km - destPlace.km);
+    const farePlace = destPlace?.fares?.tiers ? destPlace
+                    : origPlace?.fares?.tiers ? origPlace
+                    : null;
 
-    const tierKey = activeTier ?? "50-59";
+    if (!farePlace) return null;
 
-    // 🔥 Use ANY place that has fares (they should be same structure)
-    const fareSource = origPlace.fares?.tiers ? origPlace : destPlace;
-
-    if (!fareSource) return null;
-
-    const tiers = fareSource.fares?.tiers || {};
-
-    // 🔥 NOW use DISTANCE to determine fare
-    let baseFare = null;
-
-    if (distance <= 1) baseFare = tiers[tierKey];
-    else if (distance <= 3) baseFare = tiers[tierKey];
-    else if (distance <= 5) baseFare = tiers[tierKey];
-    else if (distance <= 7) baseFare = tiers[tierKey];
-    else baseFare = tiers[tierKey];
+    const tiers    = farePlace.fares?.tiers ?? {};
+    const tierKey  = activeTier ?? "50-59";       // activeTier is never null here (guarded by loading)
+    const baseFare = tiers[tierKey] ?? null;
 
     return {
       activeTier: tierKey,
-      baseFare,
-      distance_km: distance,
+      baseFare,                                         // raw fare from DB
 
+      // Pre-calculated for all ride types (useful on result page)
       sharingFare: applyMultiplier(baseFare, 1.00),
       soloFare:    applyMultiplier(baseFare, 1.25),
       nightFare:   applyMultiplier(baseFare, 2.50),
+
+      emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
+
+      "50-59": tiers["50-59"] ?? null,
+      "60-69": tiers["60-69"] ?? null,
+      "70-79": tiers["70-79"] ?? null,
+      "80-89": tiers["80-89"] ?? null,
+      "90-99": tiers["90-99"] ?? null,
+
+      route:       farePlace.fares?.route        ?? null,
+      route_label: farePlace.fares?.route_label  ?? farePlace.fares?.fare_basis ?? null,
+      distance_km: farePlace.fares?.distance_km  ?? null,
+      distance:    farePlace.distance            ?? null,
     };
   };
-
-  const farePlace = places.find(p =>
-    p.fares?.route &&
-    (
-      p.fares.route.includes(origin) && p.fares.route.includes(destination)
-    )
-  );
-
 
   const handleCalculate = () => {
     const finalOrigin      = originSaved      ? originButton      : originInput;
