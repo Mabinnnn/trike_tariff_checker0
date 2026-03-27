@@ -388,3 +388,7 @@
     padding: 20px;
   }
 }
+.tariff-table td:last-child {
+  white-space: normal !important;
+  overflow: visible !important;
+}

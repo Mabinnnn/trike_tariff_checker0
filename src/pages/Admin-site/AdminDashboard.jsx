@@ -698,8 +698,15 @@ useEffect(() => {
                       <td style={{ fontSize: "0.72rem", color: "#6b7280", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(5)}, ${Number(place.coords[0]).toFixed(5)}` : ""}>
                         {(() => { try { return place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(3)}, ${Number(place.coords[0]).toFixed(3)}` : "—"; } catch(e) { return "—"; } })()}
                       </td>
-                      <td>
-                        <button className="edit-btn"   onClick={() => openEdit(place)}>Edit</button>
+                     <td
+                        style={{
+                          display: "flex",
+                          gap: "6px",
+                          flexWrap: "wrap",
+                          whiteSpace: "normal"
+                        }}
+                      >
+                        <button className="edit-btn" onClick={() => openEdit(place)}>Edit</button>
                         <button className="delete-btn" onClick={() => handleDelete(place)}>Delete</button>
                       </td>
                     </tr>
