@@ -582,7 +582,7 @@ useEffect(() => {
             >
               <option value="all">All Categories</option>
               <option value="landmark">Landmark</option>
-              <option value="zone">Zone</option>
+              <option value="poblacion">Poblacion</option>
               <option value="barangay">Barangay</option>
               <option value="sitio">Sitio</option>
               <option value="food">Food</option>
@@ -591,6 +591,7 @@ useEffect(() => {
               <option value="market">Market</option>
               <option value="school">School</option>
               <option value="supermarket">Supermarket</option>
+              <option value="convenience_store">Convenience Store</option>
               <option value="terminal">Terminal</option>
               <option value="port">Port</option>
               <option value="resort">Resort</option>
@@ -654,13 +655,14 @@ useEffect(() => {
                       <td>
                         <span style={{
                           padding: "2px 8px", borderRadius: 12, fontSize: "0.75rem", fontWeight: 600,
-                          background: place.category === "barangay"   ? "#1d4ed8"
-                            : place.category === "zone"      ? "#7c3aed"
-                            : place.category === "landmark"  ? "#b45309"
-                            : place.category === "hospital"  ? "#991b1b"
-                            : place.category === "food"      ? "#92400e"
-                            : place.category === "market"    ? "#065f46"
-                            : place.category === "school"    ? "#1e3a5f"
+                          background: place.category === "barangay"         ? "#1d4ed8"
+                            : place.category === "poblacion"     ? "#7c3aed"
+                            : place.category === "landmark"      ? "#b45309"
+                            : place.category === "hospital"      ? "#991b1b"
+                            : place.category === "food"          ? "#92400e"
+                            : place.category === "market"        ? "#065f46"
+                            : place.category === "school"        ? "#1e3a5f"
+                            : place.category === "convenience_store" ? "#0e7490"
                             : "#065f46",
                           color: "#fff",
                         }}>
@@ -867,7 +869,7 @@ useEffect(() => {
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
               >
                 <option value="landmark">Landmark</option>
-                <option value="zone">Zone</option>
+                <option value="poblacion">Poblacion</option>
                 <option value="barangay">Barangay</option>
                 <option value="sitio">Sitio</option>
                 <option value="food">Food</option>
@@ -876,6 +878,7 @@ useEffect(() => {
                 <option value="market">Market</option>
                 <option value="school">School</option>
                 <option value="supermarket">Supermarket</option>
+                <option value="convenience_store">Convenience Store</option>
                 <option value="terminal">Terminal</option>
                 <option value="port">Port</option>
                 <option value="resort">Resort</option>
@@ -924,7 +927,39 @@ useEffect(() => {
               <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>Saved as [longitude, latitude] in MongoDB Atlas</p>
             </div>
 
-          
+            {/* Route info */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Route</label>
+                <input
+                  type="text"
+                  value={newPlace.route}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, route: e.target.value }))}
+                  placeholder="e.g. route-1"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Route Label</label>
+                <input
+                  type="text"
+                  value={newPlace.route_label}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, route_label: e.target.value }))}
+                  placeholder="e.g. Route 1"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Distance (km)</label>
+                <input
+                  type="number"
+                  value={newPlace.distance_km}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, distance_km: e.target.value }))}
+                  placeholder="e.g. 3.5"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
 
             {/* Emergency fare */}
             <div style={{ marginBottom: 12 }}>
