@@ -132,7 +132,7 @@ export default function Checkerpage() {
       // Pre-calculated for all ride types (useful on result page)
       sharingFare: applyMultiplier(baseFare, 1.00),
       soloFare:    applyMultiplier(baseFare, 1.25),
-      nightFare:   applyMultiplier(baseFare, 2.50),
+      nightFare:   applyMultiplier(baseFare, 2.00),
 
       emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
 
