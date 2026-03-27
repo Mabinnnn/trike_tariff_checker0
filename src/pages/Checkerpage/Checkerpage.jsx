@@ -268,7 +268,7 @@ export default function Checkerpage() {
         <div className="form-body">
 
           {/* ── Ride Type Dropdown ─────────────────────────────────────────── */}
-          <div className="location-section">
+          <div className="location-section" style={{ minHeight: "120px", flexShrink: 0 }}>
             <label className="field-label">
               Uri ng Biyahe (Ride Type):
             </label>
