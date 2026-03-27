@@ -103,7 +103,9 @@ export default function Checkerpage() {
     const destPlace = places.find((p) => p.name === destination);
     const origPlace = places.find((p) => p.name === origin);
 
-    if (isPoblacion(destPlace) || isPoblacion(origPlace)) {
+    // Flat ₱20 ONLY when BOTH ends are within Poblacion (intra-Poblacion short trip).
+    // If one place is outside Poblacion (e.g. Lajong barangay), fall through to real DB fares.
+    if (isPoblacion(destPlace) && isPoblacion(origPlace)) {
       const baseFare = POBLACION_FLAT_FARE;
       const tierKey  = activeTier ?? "50-59";
       return {
