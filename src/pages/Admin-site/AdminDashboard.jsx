@@ -695,8 +695,8 @@ useEffect(() => {
                         );
                       })}
 
-                      <td style={{ fontSize: "0.75rem", color: "#6b7280", whiteSpace: "nowrap" }}>
-                        {(() => { try { return place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(5)}, ${Number(place.coords[0]).toFixed(5)}` : "—"; } catch(e) { return "—"; } })()}
+                      <td style={{ fontSize: "0.72rem", color: "#6b7280", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(5)}, ${Number(place.coords[0]).toFixed(5)}` : ""}>
+                        {(() => { try { return place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(3)}, ${Number(place.coords[0]).toFixed(3)}` : "—"; } catch(e) { return "—"; } })()}
                       </td>
                       <td>
                         <button className="edit-btn"   onClick={() => openEdit(place)}>Edit</button>
@@ -1009,7 +1009,7 @@ useEffect(() => {
       {/* ── EDIT MODAL ───────────────────────────────────────────────────────── */}
       {editPlace && (
         <div className="login-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setEditPlace(null); }}>
-          <div className="login-modal" style={{ maxWidth: 480, width: "100%" }}>
+          <div className="login-modal" style={{ maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
             <h3 style={{ marginBottom: 16, color: "#22c55e" }}>✏️ Edit: {editPlace.name}</h3>
 
             {/* Route info (read-only) */}
