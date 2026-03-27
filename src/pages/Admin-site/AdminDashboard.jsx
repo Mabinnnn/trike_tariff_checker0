@@ -924,39 +924,7 @@ useEffect(() => {
               <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>Saved as [longitude, latitude] in MongoDB Atlas</p>
             </div>
 
-            {/* Route info */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Route</label>
-                <input
-                  type="text"
-                  value={newPlace.route}
-                  onChange={(e) => setNewPlace((p) => ({ ...p, route: e.target.value }))}
-                  placeholder="e.g. route-1"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Route Label</label>
-                <input
-                  type="text"
-                  value={newPlace.route_label}
-                  onChange={(e) => setNewPlace((p) => ({ ...p, route_label: e.target.value }))}
-                  placeholder="e.g. Route 1"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Distance (km)</label>
-                <input
-                  type="number"
-                  value={newPlace.distance_km}
-                  onChange={(e) => setNewPlace((p) => ({ ...p, distance_km: e.target.value }))}
-                  placeholder="e.g. 3.5"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
-                />
-              </div>
-            </div>
+          
 
             {/* Emergency fare */}
             <div style={{ marginBottom: 12 }}>
