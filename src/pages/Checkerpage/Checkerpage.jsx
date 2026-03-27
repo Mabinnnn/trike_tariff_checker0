@@ -13,7 +13,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 export const RIDE_TYPES = [
   { value: "sharing", label: " Sharing (Sabay-sakay)",    multiplier: 1.00, increasePercent:   0 },
   { value: "solo",    label: " Solo / Special (Mag-isa)", multiplier: 1.25, increasePercent:  25 },
-  { value: "night",   label: " Night (Gabi)",             multiplier: 2.50, increasePercent: 150 },
+  { value: "night",   label: " Night (Gabi)",             multiplier: 1.75, increasePercent: 50 },
 ];
 
 const applyMultiplier = (baseFare, multiplier) =>
