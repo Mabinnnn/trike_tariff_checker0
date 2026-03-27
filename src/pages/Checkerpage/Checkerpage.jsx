@@ -98,10 +98,21 @@ export default function Checkerpage() {
     const isPoblacion = (place) =>
     place?.category?.toLowerCase() === "poblacion";
 
+  // ── Helper: extract numeric km from a place document ─────────────────────
+  // Prefers fares.distance_km (number), falls back to place.distance (may be string like "3.5 km")
+  const getPlaceKm = (place) => {
+    if (!place) return 0;
+    if (place.fares?.distance_km != null) return parseFloat(place.fares.distance_km) || 0;
+    if (place.distance != null) return parseFloat(place.distance) || 0;
+    return 0;
+  };
+
   // ── Fare lookup — base fare from route + multiplier applied ───────────────
+  // Rule: when both places have fare data, use the one with the HIGHER km.
+  // Example: From=14 km, To=3.5 km → use From's fare.
   const getFareForRoute = (origin, destination) => {
-    const destPlace = places.find((p) => p.name === destination);
     const origPlace = places.find((p) => p.name === origin);
+    const destPlace = places.find((p) => p.name === destination);
 
     // Flat ₱20 ONLY when BOTH ends are within Poblacion (intra-Poblacion short trip).
     // If one place is outside Poblacion (e.g. Lajong barangay), fall through to real DB fares.
@@ -125,9 +136,21 @@ export default function Checkerpage() {
       };
     }
 
-    const farePlace = destPlace?.fares?.tiers ? destPlace
-                    : origPlace?.fares?.tiers ? origPlace
-                    : null;
+    const origHasFares = !!(origPlace?.fares?.tiers);
+    const destHasFares = !!(destPlace?.fares?.tiers);
+
+    let farePlace = null;
+
+    if (origHasFares && destHasFares) {
+      // Both places have fare data — pick the one with the HIGHER km
+      const origKm = getPlaceKm(origPlace);
+      const destKm = getPlaceKm(destPlace);
+      farePlace = origKm >= destKm ? origPlace : destPlace;
+    } else if (origHasFares) {
+      farePlace = origPlace;
+    } else if (destHasFares) {
+      farePlace = destPlace;
+    }
 
     if (!farePlace) return null;
 
