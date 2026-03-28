@@ -124,8 +124,8 @@ export default function Checkerpage() {
         baseFare,
         isPoblacionFlat: true,
         sharingFare: applyMultiplier(baseFare, 1.00),
-        soloFare:    applyMultiplier(baseFare, 1.25),
-        nightFare:   applyMultiplier(baseFare, 2.50),
+        soloFare:    applyMultiplier(baseFare, 1.00),
+        nightFare:   applyMultiplier(baseFare, 1.00),
         emergency_provisional_php: null,
         "50-59": baseFare, "60-69": baseFare, "70-79": baseFare,
         "80-89": baseFare, "90-99": baseFare,
@@ -210,8 +210,10 @@ export default function Checkerpage() {
     const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
 
     const baseFare = routeData?.baseFare ?? null;
+    // Intra-Poblacion routes are always flat ₱20 regardless of ride type (sharing/solo/night).
+    // Only non-Poblacion routes get the ride-type multiplier applied.
     const effectiveMultiplier =
-      routeData?.isPoblacionFlat && rideType !== "night" ? 1.00 : selectedRide.multiplier;
+      routeData?.isPoblacionFlat ? 1.00 : selectedRide.multiplier;
 
     const finalFare    = applyMultiplier(baseFare, effectiveMultiplier);
     const fareIncrease = (baseFare != null && finalFare != null)
