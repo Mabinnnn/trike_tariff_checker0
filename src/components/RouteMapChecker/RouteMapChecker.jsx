@@ -105,7 +105,7 @@ export default function RouteMapChecker({
       center:    MAP_CENTER,
       zoom:      MAP_ZOOM,
     });
-    map.addControl(new window.maplibregl.NavigationControl(), "top-right");
+    map.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.on("load", () => { mapLoadedRef.current = true; });
     mapInstanceRef.current = map;
   }, []);

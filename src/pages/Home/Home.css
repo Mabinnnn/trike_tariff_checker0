@@ -302,3 +302,181 @@
   font-size: 18px;
   cursor: pointer;
 }
+/* =========================
+   Notice Popup
+   ========================= */
+
+.notice-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.notice-modal {
+  width: 100%;
+  max-width: 380px;
+  border-radius: 18px;
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  animation: noticePop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes noticePop {
+  from { transform: scale(0.88); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* Dark / Light themes */
+.notice-dark {
+  background: #1e1f1e;
+  color: #f0f0f0;
+  border: 1px solid rgba(85, 255, 85, 0.18);
+}
+
+.notice-light {
+  background: #ffffff;
+  color: #121212;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.notice-close-btn {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+
+  background: rgba(0, 0, 0, 0.5); /* darker so contrast is clear */
+  border: none;
+
+  color: white;
+  cursor: pointer;
+
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 9999;
+}
+
+/* FORCE icon size + visibility */
+.notice-close-btn svg {
+  width: 24px;
+  height: 24px;
+  color: white;
+  stroke-width: 2.5; /* makes it thicker */
+}
+
+/* ── Header badge ── */
+.notice-header {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+.notice-badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: #55ff55;
+  color: #121212;
+  padding: 4px 14px;
+  border-radius: 999px;
+}
+
+/* ── Body text ── */
+.notice-body {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  text-align: center;
+  margin: 0;
+}
+
+.notice-dark  .notice-body { color: #d4d4d4; }
+.notice-light .notice-body { color: #333333; }
+
+/* ── Facebook links row ── */
+.notice-fb-links {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.notice-fb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  background: #1877F2;
+  color: #ffffff;
+  transition: background 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.notice-fb-btn:hover {
+  background: #55ff55;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.notice-fb-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* ── Footer — Skip button ── */
+.notice-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+
+.notice-skip-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  text-decoration: underline;
+  padding: 0;
+  transition: opacity 0.2s;
+}
+
+.notice-dark  .notice-skip-btn { color: #888888; }
+.notice-light .notice-skip-btn { color: #888888; }
+
+.notice-skip-btn:hover { opacity: 0.7; }
+
+/* ── Mobile tweaks ── */
+@media (max-width: 480px) {
+  .notice-modal {
+    padding: 24px 18px 18px;
+    border-radius: 14px;
+  }
+
+  .notice-fb-links {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .notice-fb-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

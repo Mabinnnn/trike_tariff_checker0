@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Checkerpage.css";
 import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync, FaChevronDown } from "react-icons/fa";
@@ -10,10 +10,11 @@ import { getAllPlaces } from "../../api/api";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
-export const RIDE_TYPES = [
-  { value: "sharing", label: " Sharing (Sabay-sakay)",    multiplier: 1.00, increasePercent:   0 },
-  { value: "solo",    label: " Solo / Special (Mag-isa)", multiplier: 1.25, increasePercent:  25 },
-  { value: "night",   label: " Night (Gabi)",             multiplier: 1.67, increasePercent: 67 },
+export const PASSENGER_TYPES = [
+  { value: "regular", label: "Regular",          multiplier: 1.00, discountPercent:  0 },
+  { value: "student", label: "Student (Estudyante)", multiplier: 0.80, discountPercent: 20 },
+  { value: "pwd",     label: "PWD",              multiplier: 0.80, discountPercent: 20 },
+  { value: "senior",  label: "Senior Citizen",   multiplier: 0.80, discountPercent: 20 },
 ];
 
 const applyMultiplier = (baseFare, multiplier) =>
@@ -41,12 +42,37 @@ export default function Checkerpage() {
   const [originInput, setOriginInput]             = useState("");
   const [destinationInput, setDestinationInput]   = useState("");
 
+  // ── Autocomplete state ────────────────────────────────────────────────────
+  const [originSuggestions, setOriginSuggestions]           = useState([]);
+  const [originActiveIndex, setOriginActiveIndex]           = useState(-1);
+  const [destinationSuggestions, setDestinationSuggestions] = useState([]);
+  const [destinationActiveIndex, setDestinationActiveIndex] = useState(-1);
+
+  const originRef      = useRef(null);
+  const destinationRef = useRef(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (originRef.current && !originRef.current.contains(e.target)) {
+        setOriginSuggestions([]);
+        setOriginActiveIndex(-1);
+      }
+      if (destinationRef.current && !destinationRef.current.contains(e.target)) {
+        setDestinationSuggestions([]);
+        setDestinationActiveIndex(-1);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType]     = useState("");
   const [searchTerm, setSearchTerm]   = useState("");
 
-  // ── Ride type selected by user ────────────────────────────────────────────
-  const [rideType, setRideType] = useState("sharing");
+  // ── Passenger type selected by user ──────────────────────────────────────
+  const [passengerType, setPassengerType] = useState("regular");
 
   useEffect(() => {
     Promise.all([fetchPlaces(), fetchActiveTier()]);
@@ -89,14 +115,43 @@ export default function Checkerpage() {
     localStorage.setItem("trikeTheme", next ? "dark" : "light");
   };
 
-  const filterPlaces = (value) =>
-    places
+  const filterPlaces = (value) => {
+    if (!value || value.trim().length < 2) return [];
+    const lower = value.trim().toLowerCase();
+    return places
       .map((p) => p.name)
-      .filter((name) => name.toLowerCase().includes(value.toLowerCase()));
+      .filter((name) => name.toLowerCase().startsWith(lower));
+  };
   
-  const POBLACION_FLAT_FARE = 20;
-    const isPoblacion = (place) =>
-    place?.category?.toLowerCase() === "poblacion";
+  const SHORT_TRIP_FLAT_FARE = 20;  // ₱20 for trips 0.0-2.0 km
+  const SHORT_TRIP_MAX_KM = 2.0;    // Maximum distance for flat fare
+
+  // Extract coordinates from a place document
+  const getCoords = (place) => {
+    if (!place?.coords) return null;
+    if (Array.isArray(place.coords)) return place.coords;
+    if (place.coords.coordinates && Array.isArray(place.coords.coordinates)) {
+      return place.coords.coordinates;
+    }
+    return null;
+  };
+
+  // Calculate distance in km between two coordinate pairs using Haversine formula
+  const getDistanceKmFromCoords = (from, to) => {
+    if (!from || !to || from.length < 2 || to.length < 2) return null;
+    const [lng1, lat1] = from;
+    const [lng2, lat2] = to;
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const R = 6371; // Earth radius in kilometers
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
   // ── Helper: extract numeric km from a place document ─────────────────────
   // Prefers fares.distance_km (number), falls back to place.distance (may be string like "3.5 km")
@@ -114,27 +169,29 @@ export default function Checkerpage() {
     const origPlace = places.find((p) => p.name === origin);
     const destPlace = places.find((p) => p.name === destination);
 
-    // Flat ₱20 ONLY when BOTH ends are within Poblacion (intra-Poblacion short trip).
-    // If one place is outside Poblacion (e.g. Lajong barangay), fall through to real DB fares.
-    if (isPoblacion(destPlace) && isPoblacion(origPlace)) {
-      const baseFare = POBLACION_FLAT_FARE;
-      const tierKey  = activeTier ?? "50-59";
+    // ── Check distance between places for short trip flat fare ───────────────
+    // If distance is 0.0-2.0 km, apply ₱20 flat fare
+    const coordsA = getCoords(origPlace);
+    const coordsB = getCoords(destPlace);
+    const geoDistance = getDistanceKmFromCoords(coordsA, coordsB);
+
+    if (geoDistance != null && geoDistance <= SHORT_TRIP_MAX_KM) {
+      const baseFare = SHORT_TRIP_FLAT_FARE;
+      const tierKey = activeTier ?? "50-59";
       return {
         activeTier: tierKey,
         baseFare,
-        isPoblacionFlat: true,
-        sharingFare: applyMultiplier(baseFare, 1.00),
-        soloFare:    applyMultiplier(baseFare, 1.00),
-        nightFare:   applyMultiplier(baseFare, 1.00),
+        isShortTripFlat: true,
         emergency_provisional_php: null,
         "50-59": baseFare, "60-69": baseFare, "70-79": baseFare,
         "80-89": baseFare, "90-99": baseFare,
-        route:       "Poblacion",
-        route_label: "Around Poblacion (Flat Rate)",
-        distance_km: null,
-        distance:    null,
+        route: "Short Trip",
+        route_label: `Short Trip ≤ ${SHORT_TRIP_MAX_KM} km (Flat Rate ₱${SHORT_TRIP_FLAT_FARE})`,
+        distance_km: parseFloat(geoDistance.toFixed(2)),
+        distance: `${geoDistance.toFixed(1)} km`,
       };
     }
+    // Distance > 2.0 km → use original database fare below
 
     const origHasFares = !!(origPlace?.fares?.tiers);
     const destHasFares = !!(destPlace?.fares?.tiers);
@@ -161,11 +218,6 @@ export default function Checkerpage() {
     return {
       activeTier: tierKey,
       baseFare,                                         // raw fare from DB
-
-      // Pre-calculated for all ride types (useful on result page)
-      sharingFare: applyMultiplier(baseFare, 1.00),
-      soloFare:    applyMultiplier(baseFare, 1.25),
-      nightFare:   applyMultiplier(baseFare, 2.50),
 
       emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
 
@@ -206,30 +258,28 @@ export default function Checkerpage() {
       return;
     }
 
-    const routeData    = getFareForRoute(finalOrigin, finalDestination);
-    const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
+    const routeData       = getFareForRoute(finalOrigin, finalDestination);
+    const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
 
     const baseFare = routeData?.baseFare ?? null;
-    // Intra-Poblacion routes are always flat ₱20 regardless of ride type (sharing/solo/night).
-    // Only non-Poblacion routes get the ride-type multiplier applied.
     const effectiveMultiplier =
-      routeData?.isPoblacionFlat ? 1.00 : selectedRide.multiplier;
+      routeData?.isShortTripFlat ? 1.00 : selectedPassenger.multiplier;
 
     const finalFare    = applyMultiplier(baseFare, effectiveMultiplier);
-    const fareIncrease = (baseFare != null && finalFare != null)
-      ? finalFare - baseFare
+    const fareDecrease = (baseFare != null && finalFare != null)
+      ? baseFare - finalFare
       : null;
 
     const fareInfo = {
       ...routeData,
-      // Ride-type fields
-      rideType,
-      rideLabel:       selectedRide.label,
-      multiplier:      selectedRide.multiplier,
-      increasePercent: selectedRide.increasePercent,
+      // Passenger-type fields
+      rideType:        passengerType,
+      rideLabel:       selectedPassenger.label,
+      multiplier:      selectedPassenger.multiplier,
+      discountPercent: selectedPassenger.discountPercent,
       // Final computed fare (primary amount shown on result page)
       finalFare,
-      fareIncrease,
+      fareIncrease: -fareDecrease,   // kept for result-page compat (negative = discount)
     };
 
     navigate("/result", {
@@ -246,22 +296,92 @@ export default function Checkerpage() {
     closeModal();
   };
 
-  const handleOriginKeyDown = (e) => {
-    if (e.key === "Enter" && originInput) { setOriginButton(originInput); setOriginSaved(true); }
-  };
-  const handleDestinationKeyDown = (e) => {
-    if (e.key === "Enter" && destinationInput) { setDestinationButton(destinationInput); setDestinationSaved(true); }
+  const selectSuggestion = (type, name) => {
+    if (type === "origin") {
+      setOriginInput(name);
+      setOriginButton(name);
+      setOriginSaved(true);
+      setOriginSuggestions([]);
+      setOriginActiveIndex(-1);
+    } else {
+      setDestinationInput(name);
+      setDestinationButton(name);
+      setDestinationSaved(true);
+      setDestinationSuggestions([]);
+      setDestinationActiveIndex(-1);
+    }
   };
 
-  const filteredModalPlaces = filterPlaces(searchTerm);
-  const selectedRide = RIDE_TYPES.find((r) => r.value === rideType);
+  const handleOriginKeyDown = (e) => {
+    if (originSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setOriginActiveIndex((i) => Math.min(i + 1, originSuggestions.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setOriginActiveIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const chosen = originActiveIndex >= 0 ? originSuggestions[originActiveIndex] : originSuggestions[0];
+        selectSuggestion("origin", chosen);
+      } else if (e.key === "Escape") {
+        setOriginSuggestions([]);
+        setOriginActiveIndex(-1);
+      }
+    } else if (e.key === "Enter" && originInput) {
+      const match = filterPlaces(originInput);
+      if (match.length > 0) selectSuggestion("origin", match[0]);
+    }
+  };
+  const handleDestinationKeyDown = (e) => {
+    if (destinationSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setDestinationActiveIndex((i) => Math.min(i + 1, destinationSuggestions.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setDestinationActiveIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const chosen = destinationActiveIndex >= 0 ? destinationSuggestions[destinationActiveIndex] : destinationSuggestions[0];
+        selectSuggestion("destination", chosen);
+      } else if (e.key === "Escape") {
+        setDestinationSuggestions([]);
+        setDestinationActiveIndex(-1);
+      }
+    } else if (e.key === "Enter" && destinationInput) {
+      const match = filterPlaces(destinationInput);
+      if (match.length > 0) selectSuggestion("destination", match[0]);
+    }
+  };
+
+  const filteredModalPlaces = searchTerm.trim()
+    ? places.map((p) => p.name).filter((name) => name.toLowerCase().includes(searchTerm.trim().toLowerCase()))
+    : places.map((p) => p.name);
+  const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
 
   if (loading || tierLoading) {
     return (
       <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
-        <div className="loading-container">
-          <FaSync className="spin" />
-          <p>Loading places...</p>
+        {/* Theme toggle — available while loading */}
+        <button className="loading-theme-btn" onClick={toggleTheme} title="Toggle theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={isDarkMode ? "white" : "black"} viewBox="0 0 16 16">
+            <path d="M12 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708" />
+          </svg>
+        </button>
+
+        <div className="loading-screen">
+          <div className="loading-logo-wrap">
+            <img src={isDarkMode ? logoWhite : logoBlack} alt="Trike Logo" className="loading-logo" />
+          </div>
+          <h1 className="loading-title">TrikeTariffChecker</h1>
+          <div className="loading-bar">
+            <span /><span /><span /><span /><span />
+          </div>
+          <div className="loading-spinner-row">
+            <FaSync className="loading-spin-icon" />
+            <span className="loading-label">Kina-load ang mga lugar…</span>
+          </div>
         </div>
       </div>
     );
@@ -302,38 +422,38 @@ export default function Checkerpage() {
         {/* Green body panel */}
         <div className="form-body">
 
-          {/* ── Ride Type Dropdown ─────────────────────────────────────────── */}
+          {/* ── Passenger Type ────────────────────────────────────────────── */}
           <div className="location-section" style={{ minHeight: "120px", flexShrink: 0 }}>
             <label className="field-label">
-              Uri ng Biyahe (Ride Type):
+              Uri ng Pasahero (Passenger Type):
             </label>
             <div className="ride-select-wrapper">
               <select
                 className="ride-select"
-                value={rideType}
-                onChange={(e) => setRideType(e.target.value)}
+                value={passengerType}
+                onChange={(e) => setPassengerType(e.target.value)}
               >
-                {RIDE_TYPES.map((rt) => (
-                  <option key={rt.value} value={rt.value}>
-                    {rt.label}{rt.increasePercent > 0 ? `  (+${rt.increasePercent}%)` : "  (base fare)"}
+                {PASSENGER_TYPES.map((pt) => (
+                  <option key={pt.value} value={pt.value}>
+                    {pt.label}{pt.discountPercent > 0 ? `  (−${pt.discountPercent}% discount)` : "  (base fare)"}
                   </option>
                 ))}
               </select>
               <FaChevronDown className="ride-select-arrow" />
             </div>
-            {/* Live surcharge badge */}
-            <div className={`ride-badge ride-badge--${rideType}`}>
-              <span className="ride-badge__label">{selectedRide.label}</span>
+            {/* Live discount badge */}
+            <div className={`ride-badge ride-badge--${passengerType}`}>
+              <span className="ride-badge__label">{selectedPassenger.label}</span>
               <span className="ride-badge__pill">
-                {selectedRide.increasePercent === 0
-                  ? "Base fare — walang dagdag"
-                  : `+${selectedRide.increasePercent}% surcharge`}
+                {selectedPassenger.discountPercent === 0
+                  ? "Base fare — walang diskwento"
+                  : `−${selectedPassenger.discountPercent}% diskwento`}
               </span>
             </div>
           </div>
 
           {/* Origin */}
-          <div className="location-section">
+          <div className="location-section" ref={originRef}>
             <label className="field-label"><FaMapMarkerAlt /> Pinagalingan (From):</label>
             {originSaved ? (
               <div className="saved-location-row">
@@ -341,27 +461,51 @@ export default function Checkerpage() {
                   <FaCheckCircle className="check-icon" />
                   <span>{originButton}</span>
                 </div>
-                <button className="edit-location-btn" onClick={() => { setOriginSaved(false); setOriginButton(""); setOriginInput(""); }}>
+                <button className="edit-location-btn" onClick={() => { setOriginSaved(false); setOriginButton(""); setOriginInput(""); setOriginSuggestions([]); }}>
                   <FaEdit />
                 </button>
               </div>
             ) : (
-              <div className="input-row">
-                <input
-                  type="text"
-                  className="location-input"
-                  placeholder="I-type ang pinagalingan..."
-                  value={originInput}
-                  onChange={(e) => setOriginInput(e.target.value)}
-                  onKeyDown={handleOriginKeyDown}
-                />
-                <button className="pick-btn" onClick={() => openModal("origin")}>Pumili</button>
+              <div className="autocomplete-wrapper">
+                <div className="input-row">
+                  <input
+                    type="text"
+                    className="location-input"
+                    placeholder="I-type ang pinagalingan..."
+                    value={originInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setOriginInput(val);
+                      const suggestions = val.trim() ? filterPlaces(val) : [];
+                      setOriginSuggestions(suggestions);
+                      setOriginActiveIndex(suggestions.length > 0 ? 0 : -1);
+                    }}
+                    onKeyDown={handleOriginKeyDown}
+                    autoComplete="off"
+                  />
+                  <button className="pick-btn" onClick={() => openModal("origin")}>Pumili</button>
+                </div>
+                {originSuggestions.length > 0 && (
+                  <ul className="autocomplete-dropdown">
+                    {originSuggestions.map((name, i) => (
+                      <li
+                        key={name}
+                        className={`autocomplete-item${i === originActiveIndex ? " autocomplete-item--active" : ""}`}
+                        onMouseDown={() => selectSuggestion("origin", name)}
+                        onMouseEnter={() => setOriginActiveIndex(i)}
+                      >
+                        <FaMapMarkerAlt className="autocomplete-pin" />
+                        <span>{name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>
 
           {/* Destination */}
-          <div className="location-section">
+          <div className="location-section" ref={destinationRef}>
             <label className="field-label"><FaMapMarkerAlt /> Paroroonan (To):</label>
             {destinationSaved ? (
               <div className="saved-location-row">
@@ -369,21 +513,45 @@ export default function Checkerpage() {
                   <FaCheckCircle className="check-icon" />
                   <span>{destinationButton}</span>
                 </div>
-                <button className="edit-location-btn" onClick={() => { setDestinationSaved(false); setDestinationButton(""); setDestinationInput(""); }}>
+                <button className="edit-location-btn" onClick={() => { setDestinationSaved(false); setDestinationButton(""); setDestinationInput(""); setDestinationSuggestions([]); }}>
                   <FaEdit />
                 </button>
               </div>
             ) : (
-              <div className="input-row">
-                <input
-                  type="text"
-                  className="location-input"
-                  placeholder="I-type ang paroroonan..."
-                  value={destinationInput}
-                  onChange={(e) => setDestinationInput(e.target.value)}
-                  onKeyDown={handleDestinationKeyDown}
-                />
-                <button className="pick-btn" onClick={() => openModal("destination")}>Pumili</button>
+              <div className="autocomplete-wrapper">
+                <div className="input-row">
+                  <input
+                    type="text"
+                    className="location-input"
+                    placeholder="I-type ang paroroonan..."
+                    value={destinationInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDestinationInput(val);
+                      const suggestions = val.trim() ? filterPlaces(val) : [];
+                      setDestinationSuggestions(suggestions);
+                      setDestinationActiveIndex(suggestions.length > 0 ? 0 : -1);
+                    }}
+                    onKeyDown={handleDestinationKeyDown}
+                    autoComplete="off"
+                  />
+                  <button className="pick-btn" onClick={() => openModal("destination")}>Pumili</button>
+                </div>
+                {destinationSuggestions.length > 0 && (
+                  <ul className="autocomplete-dropdown autocomplete-dropdown--up">
+                    {destinationSuggestions.map((name, i) => (
+                      <li
+                        key={name}
+                        className={`autocomplete-item${i === destinationActiveIndex ? " autocomplete-item--active" : ""}`}
+                        onMouseDown={() => selectSuggestion("destination", name)}
+                        onMouseEnter={() => setDestinationActiveIndex(i)}
+                      >
+                        <FaMapMarkerAlt className="autocomplete-pin" />
+                        <span>{name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>

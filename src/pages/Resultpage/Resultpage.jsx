@@ -77,6 +77,13 @@ export default function Resultpage() {
 
   return (
     <div className={`result-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
+      {/* Hide the Leaflet compass / bearing-reset button */}
+      <style>{`
+        .leaflet-control-zoom-reset,
+        .leaflet-bearing-reset,
+        .leaflet-control-rotate,
+        .leaflet-control-zoom a[title="Reset bearing to north"] { display: none !important; }
+      `}</style>
       <div className="container">
 
         {/* ── Header ── */}
