@@ -140,13 +140,21 @@ export default function AdminDashboard() {
     });
     setEditEmergency(place.fares?.emergency_provisional_php ?? "");
     setEditDist(place.distance ?? "");
-    setEditLat(Array.isArray(place.coords) && place.coords.length >= 2 ? place.coords[1] : "");
-    setEditLng(Array.isArray(place.coords) && place.coords.length >= 2 ? place.coords[0] : "");
+
+    // ── Handle both coord formats ──────────────────────────────────────────
+    // Old format: coords = [lng, lat]
+    // New format: coords = { type: "Point", coordinates: [lng, lat] }
+    const rawCoords = Array.isArray(place.coords)
+      ? place.coords
+      : place.coords?.coordinates ?? null;
+
+    setEditLat(rawCoords && rawCoords.length >= 2 ? rawCoords[1] : "");
+    setEditLng(rawCoords && rawCoords.length >= 2 ? rawCoords[0] : "");
     setMessage("");
   };
 
   // ── save fares ────────────────────────────────────────────────────────────
-  // Sends fares.tiers + fares.emergency_provisional_php to backend
+  // Sends fares.tiers + fares.emergency_provisional_php + coords to backend
   const handleSave = async () => {
     setLoading(true);
     try {
@@ -162,14 +170,29 @@ export default function AdminDashboard() {
         tiers,
       };
 
+      // ── Build coords to send ──────────────────────────────────────────────
+      // Always send as plain [lng, lat] array so backend/MongoDB handles it uniformly.
+      // Priority 1: user-edited values in the form
+      // Priority 2: extract from existing place.coords (handles both array + GeoJSON)
+      let coordsToSend;
+      if (editLat !== "" && editLng !== "" && !isNaN(parseFloat(editLat)) && !isNaN(parseFloat(editLng))) {
+        coordsToSend = [parseFloat(editLng), parseFloat(editLat)];
+      } else if (Array.isArray(editPlace.coords) && editPlace.coords.length >= 2) {
+        coordsToSend = editPlace.coords;                          // already [lng, lat]
+      } else if (editPlace.coords?.coordinates?.length >= 2) {
+        coordsToSend = editPlace.coords.coordinates;              // extract from GeoJSON
+      } else {
+        coordsToSend = undefined;
+      }
+
       const res  = await fetch(`${BACKEND_URL}/api/admin/places/${editPlace._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            fares: updatedFares,
-            distance: editDist || null,
-            coords: (editLat !== "" && editLng !== "" && !isNaN(parseFloat(editLat)) && !isNaN(parseFloat(editLng))) ? [parseFloat(editLng), parseFloat(editLat)] : (editPlace.coords || undefined),
-          }),
+          fares:    updatedFares,
+          distance: editDist || null,
+          coords:   coordsToSend,
+        }),
       });
       const data = await res.json();
       if (data.status === "success") {
@@ -268,7 +291,8 @@ export default function AdminDashboard() {
   // ── connect Gmail via OAuth ───────────────────────────────────────────────
   const connectGmail = () => {
     const clientId    = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const redirectUri = "https://triketariffchecker0.vercel.app/admin";
+    // Use environment variable for production, or dynamically build from current location
+    const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/admin`;
     const scope       = "https://www.googleapis.com/auth/gmail.send email profile";
     const authUrl     = `https://accounts.google.com/o/oauth2/v2/auth`
       + `?client_id=${encodeURIComponent(clientId)}`
@@ -299,7 +323,8 @@ useEffect(() => {
       // ✅ ADD ALL ADMINS HERE
       const ALLOWED_ADMINS = [
         "estrabelaedison8@gmail.com",
-        "marvinlarosa28@gmail.com"
+        "marvinlarosa28@gmail.com",
+        "keanjayvee.gito@sorsu.edu.ph"
       ];
 
       if (ALLOWED_ADMINS.includes(email)) {
@@ -439,29 +464,6 @@ useEffect(() => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 className="admin-title">Admin Dashboard</h1>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-          <button
-            onClick={() => {
-              disconnectGmail();
-              setActiveTab("gmail");
-              setMessage("");
-              connectGmail();
-            }}
-            title={gmailUser ? `Connected: ${gmailUser} — Click to switch` : "No Gmail connected"}
-            style={{
-              padding: "5px 14px", borderRadius: 7,
-              border: "1px solid #4285F4",
-              background: gmailToken ? "#1a2a4a" : "#1f2937",
-              color: gmailToken ? "#93c5fd" : "#6b7280",
-              cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
-              display: "flex", alignItems: "center", gap: 6,
-              transition: "all 0.15s",
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
-              <path fill={gmailToken ? "#93c5fd" : "#6b7280"} d="M44.5 20H24v8.5h11.7C34.2 33.6 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 2.9l6-6C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
-            </svg>
-            {gmailToken ? `Switch Gmail (${gmailUser})` : "Switch Gmail Acc"}
-          </button>
           <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </div>
@@ -1041,7 +1043,13 @@ useEffect(() => {
                 </div>
               </div>
               <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>
-                MongoDB stores as [longitude, latitude]. Current: {editPlace?.coords ? `[${editPlace.coords[0]}, ${editPlace.coords[1]}]` : "none"}
+                MongoDB stores as [longitude, latitude]. Current:{" "}
+                {(() => {
+                  const c = Array.isArray(editPlace?.coords)
+                    ? editPlace.coords
+                    : editPlace?.coords?.coordinates ?? null;
+                  return c ? `[${c[0]}, ${c[1]}]` : "none";
+                })()}
               </p>
             </div>
 
