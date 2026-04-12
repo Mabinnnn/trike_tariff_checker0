@@ -459,7 +459,7 @@ export default function Checkerpage() {
           </div>
           <div className="loading-spinner-row">
             <FaSync className="loading-spin-icon" />
-            <span className="loading-label">Kina-load ang mga lugar…</span>
+            <span className="loading-label">Kinukuha ang mga lugar…</span>
           </div>
         </div>
       </div>
