@@ -945,6 +945,56 @@
   .light-mode .form-body .ride-select { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.18); color: #222; }
   .light-mode .form-body .ride-select option { background: #fff; color: #222; }
 
+  /* nearby-msg inside mobile form-body */
+  .dark-mode .form-body .nearby-msg {
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    color: #fde68a;
+  }
+  .light-mode .form-body .nearby-msg {
+    background: rgba(251, 191, 36, 0.14);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    color: #78350f;
+  }
+
+  /* locate-error inside mobile form-body */
+  .dark-mode .form-body .locate-error {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+  .light-mode .form-body .locate-error {
+    color: #991b1b;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  /* locate-btn inside mobile form-body — override the white desktop styles */
+  .dark-mode .form-body .locate-btn {
+    color: #a5d6a7;
+    border-color: rgba(76, 175, 80, 0.45);
+    background: rgba(76, 175, 80, 0.08);
+  }
+  .dark-mode .form-body .locate-btn:hover:not(:disabled) {
+    background: rgba(76, 175, 80, 0.16);
+    color: #c8e6c9;
+    border-color: #66BB6A;
+  }
+  .light-mode .form-body .locate-btn {
+    color: #2e7d32;
+    border-color: rgba(76, 175, 80, 0.45);
+    background: rgba(76, 175, 80, 0.07);
+  }
+  .light-mode .form-body .locate-btn:hover:not(:disabled) {
+    background: rgba(76, 175, 80, 0.14);
+    color: #1b5e20;
+    border-color: #4CAF50;
+  }
+  .light-mode .form-body .locate-btn:disabled {
+    color: #4CAF50;
+    opacity: 0.5;
+  }
+
   /* badges — light mode needs visible text */
   .light-mode .form-body .ride-badge--regular {
     background: rgba(76, 175, 80, 0.12);
