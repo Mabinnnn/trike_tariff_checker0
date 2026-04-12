@@ -251,49 +251,85 @@ export default function Checkerpage() {
     setLocating(true);
     setLocError("");
 
-    navigator.geolocation.getCurrentPosition(
+    const ACCURACY_THRESHOLD_M = 50; // accept fix only when ≤ 50 m accurate
+    const MAX_WAIT_MS          = 15000; // give up after 15 s
+    let watchId                = null;
+    let settled                = false;
+
+    const finish = (position) => {
+      if (settled) return;
+      settled = true;
+      navigator.geolocation.clearWatch(watchId);
+
+      const { latitude, longitude } = position.coords;
+      const userCoords = [longitude, latitude]; // [lng, lat] — matches DB format
+
+      // Find the closest place using Haversine distance
+      let nearest = null;
+      let minDist = Infinity;
+
+      places.forEach((place) => {
+        const placeCoords = getCoords(place);
+        if (!placeCoords) return;
+        const dist = getDistanceKmFromCoords(userCoords, placeCoords);
+        if (dist !== null && dist < minDist) {
+          minDist = dist;
+          nearest = place;
+        }
+      });
+
+      if (nearest) {
+        setOriginInput(nearest.name);
+        setOriginButton(nearest.name);
+        setOriginSaved(true);
+        setOriginSuggestions([]);
+        setLocError("");
+      } else {
+        setLocError("Walang lugar na nahanap malapit sa iyo.");
+      }
+
+      setLocating(false);
+    };
+
+    const onError = (err) => {
+      if (settled) return;
+      settled = true;
+      navigator.geolocation.clearWatch(watchId);
+      setLocating(false);
+      if (err.code === 1) {
+        setLocError("⚠️ Hindi pinahintulutan ang lokasyon. I-allow ang location permission sa browser.");
+      } else if (err.code === 2) {
+        setLocError("⚠️ Hindi ma-detect ang iyong lokasyon. Siguraduhing naka-on ang GPS.");
+      } else {
+        setLocError("⚠️ Nag-timeout. Subukang muli.");
+      }
+    };
+
+    // watchPosition keeps refining the fix; we accept the first reading
+    // that is accurate enough, then immediately stop watching.
+    watchId = navigator.geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        const userCoords = [longitude, latitude]; // [lng, lat] — matches DB format
-
-        // Find the closest place using Haversine distance
-        let nearest  = null;
-        let minDist  = Infinity;
-
-        places.forEach((place) => {
-          const placeCoords = getCoords(place);
-          if (!placeCoords) return;
-          const dist = getDistanceKmFromCoords(userCoords, placeCoords);
-          if (dist !== null && dist < minDist) {
-            minDist = dist;
-            nearest = place;
-          }
-        });
-
-        if (nearest) {
-          setOriginInput(nearest.name);
-          setOriginButton(nearest.name);
-          setOriginSaved(true);
-          setOriginSuggestions([]);
-          setLocError(""); // clear any previous error
-        } else {
-          setLocError("Walang lugar na nahanap malapit sa iyo.");
+        if (position.coords.accuracy <= ACCURACY_THRESHOLD_M) {
+          finish(position);
         }
-
-        setLocating(false);
+        // else: keep waiting for a more accurate fix
       },
-      (err) => {
-        setLocating(false);
-        if (err.code === 1) {
-          setLocError("⚠️ Hindi pinahintulutan ang lokasyon. I-allow ang location permission sa browser.");
-        } else if (err.code === 2) {
-          setLocError("⚠️ Hindi ma-detect ang iyong lokasyon. Siguraduhing naka-on ang GPS.");
-        } else {
-          setLocError("⚠️ Nag-timeout. Subukang muli.");
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      onError,
+      { enableHighAccuracy: true, timeout: MAX_WAIT_MS, maximumAge: 0 }
     );
+
+    // Safety net: if we never get a good-enough fix within MAX_WAIT_MS,
+    // use the best reading we have via a one-shot fallback call.
+    setTimeout(() => {
+      if (!settled) {
+        navigator.geolocation.clearWatch(watchId);
+        navigator.geolocation.getCurrentPosition(
+          finish,
+          onError,
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      }
+    }, MAX_WAIT_MS);
   };
 
   const handleCalculate = () => {
