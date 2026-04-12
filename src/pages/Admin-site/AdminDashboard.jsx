@@ -174,18 +174,26 @@ export default function AdminDashboard() {
 
       // ── Build coords to send ──────────────────────────────────────────────
       // Always send as plain [lng, lat] array so backend/MongoDB handles it uniformly.
-      // Priority 1: user-edited values in the form
+      // Priority 1: user-edited values in the form (if both lat & lng are valid numbers)
       // Priority 2: extract from existing place.coords (handles both array + GeoJSON)
-      let coordsToSend;
-      if (editLat !== "" && editLng !== "" && !isNaN(parseFloat(editLat)) && !isNaN(parseFloat(editLng))) {
-        coordsToSend = [parseFloat(editLng), parseFloat(editLat)];
-      } else if (Array.isArray(editPlace.coords) && editPlace.coords.length >= 2) {
-        coordsToSend = editPlace.coords;                          // already [lng, lat]
-      } else if (editPlace.coords?.coordinates?.length >= 2) {
-        coordsToSend = editPlace.coords.coordinates;              // extract from GeoJSON
-      } else {
-        coordsToSend = undefined;
+      // Priority 3: null (no coords)
+      let coordsToSend = null;
+      const latVal = parseFloat(editLat);
+      const lngVal = parseFloat(editLng);
+      if (editLat !== "" && editLng !== "" && !isNaN(latVal) && !isNaN(lngVal)) {
+        // User has valid lat/lng — always use these (priority 1)
+        coordsToSend = [lngVal, latVal];
+      } else if (editLat === "" && editLng === "") {
+        // Both fields are blank — preserve existing coords from DB if any
+        if (Array.isArray(editPlace.coords) && editPlace.coords.length >= 2) {
+          coordsToSend = editPlace.coords;
+        } else if (editPlace.coords?.coordinates?.length >= 2) {
+          coordsToSend = editPlace.coords.coordinates;
+        } else {
+          coordsToSend = null;
+        }
       }
+      // If only one of lat/lng is filled but invalid, send null (don't save partial coords)
 
       const res  = await fetch(`${BACKEND_URL}/api/admin/places/${editPlace._id}`, {
         method: "PUT",
@@ -244,11 +252,20 @@ export default function AdminDashboard() {
         const val = newPlace.tiers[key];
         tiers[key] = val === "" || val === null ? null : parseFloat(val);
       });
+
+      // ── Build coords: only send if both lat & lng are valid numbers ──────────
+      let coordsToSend = null;
+      const latVal = parseFloat(newPlace.lat);
+      const lngVal = parseFloat(newPlace.lng);
+      if (newPlace.lat !== "" && newPlace.lng !== "" && !isNaN(latVal) && !isNaN(lngVal)) {
+        coordsToSend = [lngVal, latVal]; // MongoDB format: [longitude, latitude]
+      }
+
       const payload = {
         name: newPlace.name.trim(),
         category: newPlace.category,
         distance: newPlace.distance || null,
-        coords: (newPlace.lat !== "" && newPlace.lng !== "" && !isNaN(parseFloat(newPlace.lat)) && !isNaN(parseFloat(newPlace.lng))) ? [parseFloat(newPlace.lng), parseFloat(newPlace.lat)] : undefined,
+        coords: coordsToSend,
         fares: {
           route:       newPlace.route       || null,
           route_label: newPlace.route_label || null,
@@ -1061,6 +1078,11 @@ useEffect(() => {
                     : editPlace?.coords?.coordinates ?? null;
                   return c ? `[${c[0]}, ${c[1]}]` : "none";
                 })()}
+                {editLat !== "" && editLng !== "" && !isNaN(parseFloat(editLat)) && !isNaN(parseFloat(editLng)) && (
+                  <span style={{ color: "#4ade80", marginLeft: 6 }}>
+                    → Will save: [{parseFloat(editLng)}, {parseFloat(editLat)}]
+                  </span>
+                )}
               </p>
             </div>
 
