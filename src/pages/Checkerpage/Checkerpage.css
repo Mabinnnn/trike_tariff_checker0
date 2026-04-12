@@ -98,8 +98,8 @@
   color: #2e2d2d;
 }
 
-/* CONTENT WRAPPER */
-.tariff-page > div {
+/* CONTENT WRAPPER — only targets the main tariff-container, not the loading screen */
+.tariff-page > .tariff-container {
   width: 95%;
   max-width: 1400px;
   display: flex;
@@ -513,8 +513,10 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  align-items: flex-end;       
+  display: flex;                        /* ← was missing: flex required for align/justify */
+  align-items: flex-end;
   justify-content: center;
+  background: rgba(0, 0, 0, 0.55);     /* ← was missing: backdrop dim */
   z-index: 1000;
   padding: 0;
   animation: fadeInBg 0.2s ease;
@@ -1083,25 +1085,36 @@
    LOADING SCREEN — themed dark & light, mobile + desktop
    ============================================================ */
 
-/* Theme toggle button visible on loading screen */
+/* Logo row — logo + theme toggle side by side */
+.loading-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  position: relative;
+}
+
+/* Theme toggle button — now sits next to the logo inside the card */
 .loading-theme-btn {
-  position: fixed;
-  top: 18px;
-  right: 18px;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 6px;
+  padding: 7px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
-  z-index: 10;
+  transition: background 0.2s, transform 0.2s;
+  flex-shrink: 0;
+  align-self: flex-start;   /* aligns to top of logo so it sits near logo top */
+  margin-top: 4px;
 }
 .loading-theme-btn:hover {
   background: rgba(128, 128, 128, 0.18);
+  transform: rotate(20deg);
 }
+.dark-mode  .loading-theme-btn { color: #ffffff; }
+.light-mode .loading-theme-btn { color: #333333; }
 
 /* Central loading card */
 .loading-screen {
@@ -1109,11 +1122,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 48px 36px;
-  border-radius: 24px;
+  gap: 16px;
+  padding: 52px 44px;
+  border-radius: 28px;
   width: 90%;
-  max-width: 380px;
+  max-width: 400px;
   text-align: center;
   animation: loadFadeIn 0.45s ease both;
 }
@@ -1125,16 +1138,26 @@
 
 /* Dark mode card */
 .dark-mode .loading-screen {
-  background: #1c1c1c;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(22, 22, 22, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(76, 175, 80, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(76, 175, 80, 0.14);
 }
 
 /* Light mode card */
 .light-mode .loading-screen {
-  background: #ffffff;
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.14);
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(76, 175, 80, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(76, 175, 80, 0.13);
 }
 
 /* Logo */
@@ -1144,10 +1167,41 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
+
+/* Spinning ring around logo */
+.loading-logo-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: #4CAF50;
+  border-right-color: rgba(76, 175, 80, 0.35);
+  animation: spin 1.5s linear infinite;
+}
+
+/* Subtle glow pulse behind logo */
+.loading-logo-wrap::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: rgba(76, 175, 80, 0.08);
+  animation: logoPulse 2s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+
 .loading-logo {
   width: 100%;
   height: auto;
+  position: relative;
+  z-index: 1;
 }
 
 /* Title */
@@ -1173,73 +1227,223 @@
 /* Animated dot bar */
 .loading-bar {
   display: flex;
-  gap: 7px;
-  margin: 6px 0 2px;
+  gap: 8px;
+  margin: 8px 0 2px;
 }
 .loading-bar span {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: #4CAF50;
-  animation: dotPulse 1.2s ease-in-out infinite;
+  animation: dotPulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
 }
+.dark-mode  .loading-bar span { background: #66BB6A; box-shadow: 0 0 8px rgba(102, 187, 106, 0.6); }
+.light-mode .loading-bar span { background: #388E3C; box-shadow: 0 0 6px rgba(56, 142, 60, 0.35); }
 .loading-bar span:nth-child(1) { animation-delay: 0s; }
-.loading-bar span:nth-child(2) { animation-delay: 0.15s; }
-.loading-bar span:nth-child(3) { animation-delay: 0.30s; }
-.loading-bar span:nth-child(4) { animation-delay: 0.45s; }
-.loading-bar span:nth-child(5) { animation-delay: 0.60s; }
+.loading-bar span:nth-child(2) { animation-delay: 0.18s; }
+.loading-bar span:nth-child(3) { animation-delay: 0.36s; }
+.loading-bar span:nth-child(4) { animation-delay: 0.54s; }
+.loading-bar span:nth-child(5) { animation-delay: 0.72s; }
 
 @keyframes dotPulse {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
-  40%           { transform: scale(1.2); opacity: 1; }
+  0%, 80%, 100% { transform: scale(0.55); opacity: 0.3; }
+  40%           { transform: scale(1.25); opacity: 1; }
 }
 
 /* Spinner + label row */
 .loading-spinner-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 4px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.15);
 }
 
 .loading-spin-icon {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   color: #4CAF50;
   animation: spin 1s linear infinite;
+  flex-shrink: 0;
 }
 
 .loading-label {
-  font-size: 0.82rem;
-  font-weight: 500;
-  opacity: 0.6;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.75;
+  letter-spacing: 0.01em;
 }
 .dark-mode  .loading-label { color: #e0e0e0; }
-.light-mode .loading-label { color: #333333; }
+.light-mode .loading-label { color: #2e7d32; }
 
 /* ── Mobile tweaks (≤ 480px) ── */
 @media (max-width: 480px) {
   .loading-screen {
-    padding: 36px 24px;
-    gap: 12px;
-    max-width: 92%;
+    padding: 36px 24px 32px;
+    gap: 14px;
+    max-width: 88%;
+    border-radius: 22px;
   }
-  .loading-logo-wrap { width: 60px; height: 60px; }
-  .loading-title     { font-size: 1.25rem; }
-  .loading-subtitle  { font-size: 0.78rem; }
+  .loading-logo-wrap {
+    width: 64px;
+    height: 64px;
+  }
+  .loading-logo-wrap::before {
+    inset: -8px;
+    border-width: 2.5px;
+  }
+  .loading-title     { font-size: 1.22rem; }
+  .loading-subtitle  { font-size: 0.76rem; }
   .loading-bar span  { width: 9px; height: 9px; }
-  .loading-label     { font-size: 0.78rem; }
+  .loading-label     { font-size: 0.75rem; }
+  .loading-spinner-row { padding: 5px 12px; }
 }
 
 /* ── Desktop tweaks (≥ 768px) ── */
 @media (min-width: 768px) {
   .tariff-page { align-items: center; }
   .loading-screen {
-    padding: 56px 48px;
-    gap: 16px;
+    padding: 60px 56px 52px;
+    gap: 20px;
+    width: 90%;
     max-width: 420px;
+    border-radius: 32px;
   }
-  .loading-logo-wrap { width: 84px; height: 84px; }
-  .loading-title     { font-size: 1.65rem; }
-  .loading-subtitle  { font-size: 0.88rem; }
+  .loading-logo-wrap {
+    width: 92px;
+    height: 92px;
+  }
+  .loading-logo-wrap::before {
+    inset: -14px;
+    border-width: 3.5px;
+  }
+  .loading-title     { font-size: 1.75rem; }
+  .loading-subtitle  { font-size: 0.9rem; }
+  .loading-bar span  { width: 12px; height: 12px; }
   .loading-label     { font-size: 0.86rem; }
+  .loading-spinner-row { padding: 8px 18px; gap: 10px; }
+  .loading-spin-icon { font-size: 1.05rem; }
+}
+
+/* ============================================================
+   LOCATE (GPS) BUTTON — Pinagalingan section
+   ============================================================ */
+
+.locate-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-top: 6px;
+  border-radius: 10px;
+  border: 1.5px dashed rgba(76, 175, 80, 0.55);
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+  box-sizing: border-box;
+  letter-spacing: 0.01em;
+}
+
+.locate-btn:hover:not(:disabled) {
+  border-style: solid;
+  border-color: #4CAF50;
+  transform: translateY(-1px);
+}
+
+.locate-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.locate-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Dark mode */
+.dark-mode .locate-btn {
+  color: #a5d6a7;
+  border-color: rgba(76, 175, 80, 0.45);
+  background: rgba(76, 175, 80, 0.06);
+}
+.dark-mode .locate-btn:hover:not(:disabled) {
+  background: rgba(76, 175, 80, 0.14);
+  color: #c8e6c9;
+  border-color: #66BB6A;
+}
+
+/* Light mode */
+.light-mode .locate-btn {
+  color: #2e7d32;
+  border-color: rgba(76, 175, 80, 0.4);
+  background: rgba(76, 175, 80, 0.05);
+}
+.light-mode .locate-btn:hover:not(:disabled) {
+  background: rgba(76, 175, 80, 0.12);
+  color: #1b5e20;
+  border-color: #4CAF50;
+}
+
+/* Inside green form-body (desktop) */
+.form-body .locate-btn {
+  border-color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.08);
+}
+.form-body .locate-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: #fff;
+  color: #fff;
+}
+.form-body .locate-btn:disabled {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Icons inside the button */
+.locate-icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.locate-spin {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  animation: spin 0.9s linear infinite;
+}
+
+/* Loading pulse on the button */
+.locate-btn--loading {
+  border-style: solid;
+  animation: locatePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes locatePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* Error message */
+.locate-error {
+  font-size: 0.78rem;
+  font-weight: 500;
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  line-height: 1.45;
+}
+
+.dark-mode  .locate-error { color: #fca5a5; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239,68,68,0.2); }
+.light-mode .locate-error { color: #b91c1c; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239,68,68,0.18); }
+
+/* Inside form-body (desktop green panel) */
+.form-body .locate-error {
+  color: #fff3f3;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.4);
 }

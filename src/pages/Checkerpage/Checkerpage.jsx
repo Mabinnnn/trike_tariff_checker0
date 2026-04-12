@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Checkerpage.css";
-import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync, FaChevronDown } from "react-icons/fa";
+import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync, FaChevronDown, FaCrosshairs } from "react-icons/fa";
 
 import logoWhite from "../../assets/Logowhite-removebg-preview.png";
 import logoBlack from "../../assets/Logoblack-removebg-preview.png";
@@ -73,6 +73,10 @@ export default function Checkerpage() {
 
   // ── Passenger type selected by user ──────────────────────────────────────
   const [passengerType, setPassengerType] = useState("regular");
+
+  // ── Geolocation state ─────────────────────────────────────────────────────
+  const [locating,  setLocating]  = useState(false);
+  const [locError,  setLocError]  = useState("");
 
   useEffect(() => {
     Promise.all([fetchPlaces(), fetchActiveTier()]);
@@ -234,6 +238,61 @@ export default function Checkerpage() {
     };
   };
 
+  // ── Get nearest place from user's GPS location ───────────────────────────
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setLocError("Hindi sinusuportahan ng iyong browser ang geolocation.");
+      return;
+    }
+
+    setLocating(true);
+    setLocError("");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const userCoords = [longitude, latitude]; // [lng, lat] — matches DB format
+
+        // Find the closest place using Haversine distance
+        let nearest  = null;
+        let minDist  = Infinity;
+
+        places.forEach((place) => {
+          const placeCoords = getCoords(place);
+          if (!placeCoords) return;
+          const dist = getDistanceKmFromCoords(userCoords, placeCoords);
+          if (dist !== null && dist < minDist) {
+            minDist = dist;
+            nearest = place;
+          }
+        });
+
+        if (nearest) {
+          setOriginInput(nearest.name);
+          setOriginButton(nearest.name);
+          setOriginSaved(true);
+          setOriginSuggestions([]);
+          setLocError(""); // clear any previous error
+        } else {
+          setLocError("Walang lugar na nahanap malapit sa iyo.");
+        }
+
+        setLocating(false);
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === 1) {
+          setLocError("⚠️ Hindi pinahintulutan ang lokasyon. I-allow ang location permission sa browser.");
+        } else if (err.code === 2) {
+          setLocError("⚠️ Hindi ma-detect ang iyong lokasyon. Siguraduhing naka-on ang GPS.");
+        } else {
+          setLocError("⚠️ Nag-timeout. Subukang muli.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const handleCalculate = () => {
     const finalOrigin      = originSaved      ? originButton      : originInput;
     const finalDestination = destinationSaved ? destinationButton : destinationInput;
@@ -363,17 +422,20 @@ export default function Checkerpage() {
   if (loading || tierLoading) {
     return (
       <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
-        {/* Theme toggle — available while loading */}
-        <button className="loading-theme-btn" onClick={toggleTheme} title="Toggle theme">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={isDarkMode ? "white" : "black"} viewBox="0 0 16 16">
-            <path d="M12 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708" />
-          </svg>
-        </button>
-
         <div className="loading-screen">
-          <div className="loading-logo-wrap">
-            <img src={isDarkMode ? logoWhite : logoBlack} alt="Trike Logo" className="loading-logo" />
+
+          {/* Logo + theme toggle side by side */}
+          <div className="loading-logo-row">
+            <div className="loading-logo-wrap">
+              <img src={isDarkMode ? logoWhite : logoBlack} alt="Trike Logo" className="loading-logo" />
+            </div>
+            <button className="loading-theme-btn" onClick={toggleTheme} title="Toggle theme">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill={isDarkMode ? "white" : "#333"} viewBox="0 0 16 16">
+                <path d="M12 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708" />
+              </svg>
+            </button>
           </div>
+
           <h1 className="loading-title">TrikeTariffChecker</h1>
           <div className="loading-bar">
             <span /><span /><span /><span /><span />
@@ -485,6 +547,24 @@ export default function Checkerpage() {
                   />
                   <button className="pick-btn" onClick={() => openModal("origin")}>Pumili</button>
                 </div>
+
+                {/* ── GPS locate button ─────────────────────────────────── */}
+                <button
+                  className={`locate-btn${locating ? " locate-btn--loading" : ""}`}
+                  onClick={handleGetLocation}
+                  disabled={locating}
+                  title="Gamitin ang aking kasalukuyang lokasyon"
+                >
+                  {locating
+                    ? <FaSync className="locate-spin" />
+                    : <FaCrosshairs className="locate-icon" />}
+                  <span>{locating ? "Hinahanap ang iyong lokasyon…" : "Gamitin ang aking lokasyon"}</span>
+                </button>
+
+                {locError && (
+                  <p className="locate-error">{locError}</p>
+                )}
+
                 {originSuggestions.length > 0 && (
                   <ul className="autocomplete-dropdown">
                     {originSuggestions.map((name, i) => (
