@@ -1,726 +1,1146 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "./Checkerpage.css";
-import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync, FaChevronDown, FaCrosshairs } from "react-icons/fa";
-
-import logoWhite from "../../assets/Logowhite-removebg-preview.png";
-import logoBlack from "../../assets/Logoblack-removebg-preview.png";
-
-import { getAllPlaces } from "../../api/api";
+import "./AdminDashboard.css";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
-export const PASSENGER_TYPES = [
-  { value: "regular", label: "Regular",          multiplier: 1.00, discountPercent:  0 },
-  { value: "student", label: "Student (Estudyante)", multiplier: 0.80, discountPercent: 20 },
-  { value: "pwd",     label: "PWD",              multiplier: 0.80, discountPercent: 20 },
-  { value: "senior",  label: "Senior Citizen",   multiplier: 0.80, discountPercent: 20 },
+// ── NEW: tier keys now match fares.tiers keys in MongoDB ─────────────────────
+// "50-59" | "60-69" | "70-79" | "80-89" | "90-99"
+const FARE_KEYS = [
+  { key: "50-59", label: "Gas ₱50–59" },
+  { key: "60-69", label: "Gas ₱60–69" },
+  { key: "70-79", label: "Gas ₱70–79" },
+  { key: "80-89", label: "Gas ₱80–89" },
+  { key: "90-99", label: "Gas ₱90–99" },
 ];
 
-const applyMultiplier = (baseFare, multiplier) =>
-  baseFare != null ? Math.round(baseFare * multiplier) : null;
-// ─────────────────────────────────────────────────────────────────────────────
+const TIER_BUTTONS = [
+  { key: "50-59", label: "⛽ ₱50–59" },
+  { key: "60-69", label: "⛽ ₱60–69" },
+  { key: "70-79", label: "⛽ ₱70–79" },
+  { key: "80-89", label: "⛽ ₱80–89" },
+  { key: "90-99", label: "⛽ ₱90–99" },
+];
 
-export default function Checkerpage() {
+export default function AdminDashboard() {
   const navigate = useNavigate();
 
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem("trikeTheme");
-    return saved !== null ? saved === "dark" : true;
+  // ── auth ──────────────────────────────────────────────────────────────────
+  const [isLoggedIn,  setIsLoggedIn]  = useState(() => {
+    return sessionStorage.getItem("adminLoggedIn") === "true";
   });
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState("");
-  const [places, setPlaces]         = useState([]);
 
-  const [activeTier, setActiveTier] = useState(null);       // null = not yet loaded from server
-  const [tierLoading, setTierLoading] = useState(true);     // true while fetching active tier
+  // ── ui state ──────────────────────────────────────────────────────────────
+  const [activeTab,   setActiveTab]   = useState("places");
+  const [loading,     setLoading]     = useState(false);
+  const [message,     setMessage]     = useState("");
 
-  const [originSaved, setOriginSaved]             = useState(false);
-  const [destinationSaved, setDestinationSaved]   = useState(false);
-  const [originButton, setOriginButton]           = useState("");
-  const [destinationButton, setDestinationButton] = useState("");
-  const [originInput, setOriginInput]             = useState("");
-  const [destinationInput, setDestinationInput]   = useState("");
+  // ── active gasoline tier (stored in MongoDB) ──────────────────────────────
+  // Default "50-59" — matches the new fares.tiers key format
+  const [activeTier,  setActiveTier]  = useState("50-59");
+  const [tierSaving,  setTierSaving]  = useState(false);
 
-  // ── Autocomplete state ────────────────────────────────────────────────────
-  const [originSuggestions, setOriginSuggestions]           = useState([]);
-  const [originActiveIndex, setOriginActiveIndex]           = useState(-1);
-  const [destinationSuggestions, setDestinationSuggestions] = useState([]);
-  const [destinationActiveIndex, setDestinationActiveIndex] = useState(-1);
+  // ── gmail state ───────────────────────────────────────────────────────────
+  const [gmailToken,    setGmailToken]    = useState(() => sessionStorage.getItem("adminGmailToken") || null);
+  const [gmailUser,     setGmailUser]     = useState(() => sessionStorage.getItem("adminGmailUser") || "");
+  const [gmailError,    setGmailError]    = useState("");
+  const [emailTo,       setEmailTo]       = useState("");
+  const [emailSubject,  setEmailSubject]  = useState("");
+  const [emailBody,     setEmailBody]     = useState("");
+  const [emailSending,  setEmailSending]  = useState(false);
 
-  const originRef      = useRef(null);
-  const destinationRef = useRef(null);
+  // ── places state ──────────────────────────────────────────────────────────
+  const [places,      setPlaces]      = useState([]);
+  const [searchTerm,  setSearchTerm]  = useState("");
+  const [filterCat,   setFilterCat]   = useState("all");
+  const [editPlace,   setEditPlace]   = useState(null);
+  const [editTiers,   setEditTiers]   = useState({});       // fares.tiers
+  const [editEmergency, setEditEmergency] = useState("");   // fares.emergency_provisional_php
+  const [editDist,    setEditDist]    = useState("");
+  const [editLat,     setEditLat]     = useState("");       // coords latitude
+  const [editLng,     setEditLng]     = useState("");       // coords longitude
 
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (originRef.current && !originRef.current.contains(e.target)) {
-        setOriginSuggestions([]);
-        setOriginActiveIndex(-1);
-      }
-      if (destinationRef.current && !destinationRef.current.contains(e.target)) {
-        setDestinationSuggestions([]);
-        setDestinationActiveIndex(-1);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // ── add place modal state ─────────────────────────────────────────────────
+  const [showAddModal,  setShowAddModal]  = useState(false);
+  const [newPlace, setNewPlace] = useState({
+    name: "", category: "landmark", distance: "",
+    lat: "", lng: "",
+    route: "", route_label: "", distance_km: "",
+    emergency: "",
+    tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
+  });
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType]     = useState("");
-  const [searchTerm, setSearchTerm]   = useState("");
-
-  // ── Passenger type selected by user ──────────────────────────────────────
-  const [passengerType, setPassengerType] = useState("regular");
-
-  // ── Geolocation state ─────────────────────────────────────────────────────
-  const [locating,   setLocating]   = useState(false);
-  const [locError,   setLocError]   = useState("");
-
-  // ── Too-close places message ──────────────────────────────────────────────
-  const [nearbyMsg,  setNearbyMsg]  = useState("");
-
-  useEffect(() => {
-    Promise.all([fetchPlaces(), fetchActiveTier()]);
-  }, []);
-
+  // ── fetch places ──────────────────────────────────────────────────────────
   const fetchPlaces = async () => {
     setLoading(true);
-    setError("");
     try {
-      const data = await getAllPlaces();
-      setPlaces(data);
-    } catch (err) {
-      console.error("Error fetching places:", err);
-      setError("Cannot connect to server. Please try again later.");
+      const res  = await fetch(`${BACKEND_URL}/api/admin/places`);
+      const data = await res.json();
+      if (data.status === "success") setPlaces(data.places);
+    } catch {
+      setMessage("❌ Error loading places");
     } finally {
       setLoading(false);
     }
   };
 
+  // ── fetch active tier from MongoDB ────────────────────────────────────────
   const fetchActiveTier = async () => {
-    setTierLoading(true);
     try {
       const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`);
       const data = await res.json();
       if (data.status === "success" && data.activeTier) {
         setActiveTier(data.activeTier);
-      } else {
-        setActiveTier("50-59"); // safe fallback if server returns unexpected shape
       }
     } catch {
-      setActiveTier("50-59"); // safe fallback on network error
+      // silently keep default
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchPlaces();
+      fetchActiveTier();
+    }
+  }, [isLoggedIn]);
+
+  // ── save active tier to MongoDB ───────────────────────────────────────────
+  const handleTierChange = async (tierKey) => {
+    setTierSaving(true);
+    setMessage("");
+    try {
+      const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activeTier: tierKey }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setActiveTier(tierKey);
+        const found = TIER_BUTTONS.find((t) => t.key === tierKey);
+        setMessage(`✅ Active fare tier set to "${found?.label}" and saved to database.`);
+      } else {
+        setMessage(`❌ Failed to save tier: ${data.message}`);
+      }
+    } catch {
+      setMessage("❌ Could not connect to server to save tier.");
     } finally {
-      setTierLoading(false);
+      setTierSaving(false);
     }
   };
 
-  const toggleTheme = () => {
-    const next = !isDarkMode;
-    setIsDarkMode(next);
-    localStorage.setItem("trikeTheme", next ? "dark" : "light");
-  };
-
-  const filterPlaces = (value) => {
-    if (!value || value.trim().length < 2) return [];
-    const lower = value.trim().toLowerCase();
-    return places
-      .map((p) => p.name)
-      .filter((name) => name.toLowerCase().startsWith(lower));
-  };
-  
-  const SHORT_TRIP_FLAT_FARE = 20;  // ₱20 for trips 0.0-2.0 km
-  const SHORT_TRIP_MAX_KM = 2.0;    // Maximum distance for flat fare
-
-  // Extract coordinates from a place document
-  const getCoords = (place) => {
-    if (!place?.coords) return null;
-    if (Array.isArray(place.coords)) return place.coords;
-    if (place.coords.coordinates && Array.isArray(place.coords.coordinates)) {
-      return place.coords.coordinates;
-    }
-    return null;
-  };
-
-  // Calculate distance in km between two coordinate pairs using Haversine formula
-  const getDistanceKmFromCoords = (from, to) => {
-    if (!from || !to || from.length < 2 || to.length < 2) return null;
-    const [lng1, lat1] = from;
-    const [lng2, lat2] = to;
-    const toRad = (deg) => (deg * Math.PI) / 180;
-    const R = 6371; // Earth radius in kilometers
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  // ── Helper: extract numeric km from a place document ─────────────────────
-  // Prefers fares.distance_km (number), falls back to place.distance (may be string like "3.5 km")
-  const getPlaceKm = (place) => {
-    if (!place) return 0;
-    if (place.fares?.distance_km != null) return parseFloat(place.fares.distance_km) || 0;
-    if (place.distance != null) return parseFloat(place.distance) || 0;
-    return 0;
-  };
-
-  // ── Fare lookup — base fare from route + multiplier applied ───────────────
-  // Rule: when both places have fare data, use the one with the HIGHER km.
-  // Example: From=14 km, To=3.5 km → use From's fare.
-  const getFareForRoute = (origin, destination) => {
-    const origPlace = places.find((p) => p.name === origin);
-    const destPlace = places.find((p) => p.name === destination);
-
-    // ── Check distance between places for short trip flat fare ───────────────
-    // If distance is 0.0-2.0 km, apply ₱20 flat fare
-    const coordsA = getCoords(origPlace);
-    const coordsB = getCoords(destPlace);
-    const geoDistance = getDistanceKmFromCoords(coordsA, coordsB);
-
-    if (geoDistance != null && geoDistance > 0.1 && geoDistance <= SHORT_TRIP_MAX_KM) {
-      const baseFare = SHORT_TRIP_FLAT_FARE;
-      const tierKey = activeTier ?? "50-59";
-      return {
-        activeTier: tierKey,
-        baseFare,
-        isShortTripFlat: true,
-        emergency_provisional_php: null,
-        "50-59": baseFare, "60-69": baseFare, "70-79": baseFare,
-        "80-89": baseFare, "90-99": baseFare,
-        route: "Short Trip",
-        route_label: `Short Trip ≤ ${SHORT_TRIP_MAX_KM} km (Flat Rate ₱${SHORT_TRIP_FLAT_FARE})`,
-        distance_km: parseFloat(geoDistance.toFixed(2)),
-        distance: `${geoDistance.toFixed(1)} km`,
-      };
-    }
-    // Distance > 2.0 km → use original database fare below
-
-    const origHasFares = !!(origPlace?.fares?.tiers);
-    const destHasFares = !!(destPlace?.fares?.tiers);
-
-    let farePlace = null;
-
-    if (origHasFares && destHasFares) {
-      // Both places have fare data — pick the one with the HIGHER km
-      const origKm = getPlaceKm(origPlace);
-      const destKm = getPlaceKm(destPlace);
-      farePlace = origKm >= destKm ? origPlace : destPlace;
-    } else if (origHasFares) {
-      farePlace = origPlace;
-    } else if (destHasFares) {
-      farePlace = destPlace;
-    }
-
-    if (!farePlace) return null;
-
-    const tiers    = farePlace.fares?.tiers ?? {};
-    const tierKey  = activeTier ?? "50-59";       // activeTier is never null here (guarded by loading)
-    const baseFare = tiers[tierKey] ?? null;
-
-    return {
-      activeTier: tierKey,
-      baseFare,                                         // raw fare from DB
-
-      emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
-
-      "50-59": tiers["50-59"] ?? null,
-      "60-69": tiers["60-69"] ?? null,
-      "70-79": tiers["70-79"] ?? null,
-      "80-89": tiers["80-89"] ?? null,
-      "90-99": tiers["90-99"] ?? null,
-
-      route:       farePlace.fares?.route        ?? null,
-      route_label: farePlace.fares?.route_label  ?? farePlace.fares?.fare_basis ?? null,
-      distance_km: farePlace.fares?.distance_km  ?? null,
-      distance:    farePlace.distance            ?? null,
-    };
-  };
-
-  // ── Get nearest place from user's GPS location ───────────────────────────
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      setLocError("Hindi sinusuportahan ng iyong browser ang geolocation.");
-      return;
-    }
-
-    setLocating(true);
-    setLocError("");
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const userCoords = [longitude, latitude]; // [lng, lat] — matches DB format
-
-        // Find the closest place using Haversine distance
-        let nearest  = null;
-        let minDist  = Infinity;
-
-        places.forEach((place) => {
-          const placeCoords = getCoords(place);
-          if (!placeCoords) return;
-          const dist = getDistanceKmFromCoords(userCoords, placeCoords);
-          if (dist !== null && dist < minDist) {
-            minDist = dist;
-            nearest = place;
-          }
-        });
-
-        if (nearest) {
-          setOriginInput(nearest.name);
-          setOriginButton(nearest.name);
-          setOriginSaved(true);
-          setOriginSuggestions([]);
-          setLocError(""); // clear any previous error
-        } else {
-          setLocError("Walang lugar na nahanap malapit sa iyo.");
-        }
-
-        setLocating(false);
-      },
-      (err) => {
-        setLocating(false);
-        if (err.code === 1) {
-          setLocError("⚠️ Hindi pinahintulutan ang lokasyon. I-allow ang location permission sa browser.");
-        } else if (err.code === 2) {
-          setLocError("⚠️ Hindi ma-detect ang iyong lokasyon. Siguraduhing naka-on ang GPS.");
-        } else {
-          setLocError("⚠️ Nag-timeout. Subukang muli.");
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-
-  const handleCalculate = () => {
-    const finalOrigin      = originSaved      ? originButton      : originInput;
-    const finalDestination = destinationSaved ? destinationButton : destinationInput;
-
-    if (!finalOrigin || !finalDestination) {
-      alert("Mangyaring ilagay ang pinagalingan at paroroonan.");
-      return;
-    }
-
-    const validPlaceNames = places.map((p) => p.name);
-    if (!validPlaceNames.includes(finalOrigin)) {
-      alert(`"${finalOrigin}" ay hindi kilalang lugar.\nMangyaring pumili mula sa listahan (Pumili button).`);
-      return;
-    }
-    if (!validPlaceNames.includes(finalDestination)) {
-      alert(`"${finalDestination}" ay hindi kilalang lugar.\nMangyaring pumili mula sa listahan (Pumili button).`);
-      return;
-    }
-
-    if (finalOrigin === finalDestination) {
-      alert("Hindi maaaring pareho ang Pinagalingan at Paroroonan.\nMangyaring pumili ng ibang lugar.");
-      return;
-    }
-
-    // ── Too-close check: 1 m – 5 m apart ─────────────────────────────────
-    const origPlace = places.find((p) => p.name === finalOrigin);
-    const destPlace = places.find((p) => p.name === finalDestination);
-    const coordsA   = getCoords(origPlace);
-    const coordsB   = getCoords(destPlace);
-    const geoDist   = getDistanceKmFromCoords(coordsA, coordsB);   // km
-
-    if (geoDist !== null && geoDist >= 0.001 && geoDist <= 0.1) {
-      setNearbyMsg("These places are just across from each other.");
-      return;
-    }
-
-    setNearbyMsg(""); // clear if previously shown
-
-    const routeData       = getFareForRoute(finalOrigin, finalDestination);
-    const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
-
-    const baseFare = routeData?.baseFare ?? null;
-    const effectiveMultiplier =
-      routeData?.isShortTripFlat ? 1.00 : selectedPassenger.multiplier;
-
-    const finalFare    = applyMultiplier(baseFare, effectiveMultiplier);
-    const fareDecrease = (baseFare != null && finalFare != null)
-      ? baseFare - finalFare
-      : null;
-
-    const fareInfo = {
-      ...routeData,
-      // Passenger-type fields
-      rideType:        passengerType,
-      rideLabel:       selectedPassenger.label,
-      multiplier:      selectedPassenger.multiplier,
-      discountPercent: selectedPassenger.discountPercent,
-      // Final computed fare (primary amount shown on result page)
-      finalFare,
-      fareIncrease: -fareDecrease,   // kept for result-page compat (negative = discount)
-    };
-
-    navigate("/result", {
-      state: { origin: finalOrigin, destination: finalDestination, fareInfo },
+  // ── open edit form ────────────────────────────────────────────────────────
+  // Reads from place.fares.tiers and place.fares.emergency_provisional_php
+  const openEdit = (place) => {
+    setEditPlace(place);
+    setEditTiers({
+      "50-59": place.fares?.tiers?.["50-59"] ?? "",
+      "60-69": place.fares?.tiers?.["60-69"] ?? "",
+      "70-79": place.fares?.tiers?.["70-79"] ?? "",
+      "80-89": place.fares?.tiers?.["80-89"] ?? "",
+      "90-99": place.fares?.tiers?.["90-99"] ?? "",
     });
+    setEditEmergency(place.fares?.emergency_provisional_php ?? "");
+    setEditDist(place.distance ?? "");
+
+    // ── Handle both coord formats ──────────────────────────────────────────
+    // Old format: coords = [lng, lat]
+    // New format: coords = { type: "Point", coordinates: [lng, lat] }
+    const rawCoords = Array.isArray(place.coords)
+      ? place.coords
+      : place.coords?.coordinates ?? null;
+
+    setEditLat(rawCoords && rawCoords.length >= 2 ? rawCoords[1] : "");
+    setEditLng(rawCoords && rawCoords.length >= 2 ? rawCoords[0] : "");
+    setMessage("");
   };
 
-  const openModal  = (type) => { setModalType(type); setSearchTerm(""); setIsModalOpen(true); };
-  const closeModal = () => setIsModalOpen(false);
+  // ── save fares ────────────────────────────────────────────────────────────
+  // Sends fares.tiers + fares.emergency_provisional_php + coords to backend
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const tiers = {};
+      FARE_KEYS.forEach(({ key }) => {
+        const val = editTiers[key];
+        tiers[key] = val === "" || val === null ? null : parseFloat(val);
+      });
 
-  const handleSetLocation = (loc) => {
-    if (modalType === "origin") { setOriginButton(loc); setOriginSaved(true); }
-    else { setDestinationButton(loc); setDestinationSaved(true); }
-    closeModal();
-  };
+      const updatedFares = {
+        ...editPlace.fares,                     // keep route / route_label / distance_km
+        emergency_provisional_php: editEmergency === "" ? null : parseFloat(editEmergency),
+        tiers,
+      };
 
-  const selectSuggestion = (type, name) => {
-    if (type === "origin") {
-      setOriginInput(name);
-      setOriginButton(name);
-      setOriginSaved(true);
-      setOriginSuggestions([]);
-      setOriginActiveIndex(-1);
-    } else {
-      setDestinationInput(name);
-      setDestinationButton(name);
-      setDestinationSaved(true);
-      setDestinationSuggestions([]);
-      setDestinationActiveIndex(-1);
-    }
-  };
-
-  const handleOriginKeyDown = (e) => {
-    if (originSuggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setOriginActiveIndex((i) => Math.min(i + 1, originSuggestions.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setOriginActiveIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const chosen = originActiveIndex >= 0 ? originSuggestions[originActiveIndex] : originSuggestions[0];
-        selectSuggestion("origin", chosen);
-      } else if (e.key === "Escape") {
-        setOriginSuggestions([]);
-        setOriginActiveIndex(-1);
+      // ── Build coords to send ──────────────────────────────────────────────
+      // Always send as plain [lng, lat] array so backend/MongoDB handles it uniformly.
+      // Priority 1: user-edited values in the form (if both lat & lng are valid numbers)
+      // Priority 2: extract from existing place.coords (handles both array + GeoJSON)
+      // Priority 3: null (no coords)
+      let coordsToSend = null;
+      const latVal = parseFloat(editLat);
+      const lngVal = parseFloat(editLng);
+      if (editLat !== "" && editLng !== "" && !isNaN(latVal) && !isNaN(lngVal)) {
+        // User has valid lat/lng — always use these (priority 1)
+        coordsToSend = [lngVal, latVal];
+      } else if (editLat === "" && editLng === "") {
+        // Both fields are blank — preserve existing coords from DB if any
+        if (Array.isArray(editPlace.coords) && editPlace.coords.length >= 2) {
+          coordsToSend = editPlace.coords;
+        } else if (editPlace.coords?.coordinates?.length >= 2) {
+          coordsToSend = editPlace.coords.coordinates;
+        } else {
+          coordsToSend = null;
+        }
       }
-    } else if (e.key === "Enter" && originInput) {
-      const match = filterPlaces(originInput);
-      if (match.length > 0) selectSuggestion("origin", match[0]);
-    }
-  };
-  const handleDestinationKeyDown = (e) => {
-    if (destinationSuggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setDestinationActiveIndex((i) => Math.min(i + 1, destinationSuggestions.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setDestinationActiveIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const chosen = destinationActiveIndex >= 0 ? destinationSuggestions[destinationActiveIndex] : destinationSuggestions[0];
-        selectSuggestion("destination", chosen);
-      } else if (e.key === "Escape") {
-        setDestinationSuggestions([]);
-        setDestinationActiveIndex(-1);
+      // If only one of lat/lng is filled but invalid, send null (don't save partial coords)
+
+      const res  = await fetch(`${BACKEND_URL}/api/admin/places/${editPlace._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fares:    updatedFares,
+          distance: editDist || null,
+          coords:   coordsToSend,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setPlaces((prev) => prev.map((p) => p._id === editPlace._id ? data.place : p));
+        setEditPlace(null);
+        setMessage(`✅ "${data.place.name}" updated successfully!`);
+      } else {
+        setMessage(`❌ ${data.message}`);
       }
-    } else if (e.key === "Enter" && destinationInput) {
-      const match = filterPlaces(destinationInput);
-      if (match.length > 0) selectSuggestion("destination", match[0]);
+    } catch {
+      setMessage("❌ Error saving place");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredModalPlaces = searchTerm.trim()
-    ? places.map((p) => p.name).filter((name) => name.toLowerCase().includes(searchTerm.trim().toLowerCase()))
-    : places.map((p) => p.name);
-  const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
+  // ── delete place ──────────────────────────────────────────────────────────
+  const handleDelete = async (place) => {
+    if (!confirm(`Delete "${place.name}"?`)) return;
+    setLoading(true);
+    try {
+      const res  = await fetch(`${BACKEND_URL}/api/admin/places/${place._id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.status === "success") {
+        setPlaces((prev) => prev.filter((p) => p._id !== place._id));
+        setMessage(`✅ "${place.name}" deleted.`);
+      } else {
+        setMessage(`❌ ${data.message}`);
+      }
+    } catch {
+      setMessage("❌ Error deleting place");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (loading || tierLoading) {
+  // ── add new place ─────────────────────────────────────────────────────────
+  const handleAddPlace = async () => {
+    if (!newPlace.name.trim()) {
+      setMessage("❌ Place name is required.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const tiers = {};
+      FARE_KEYS.forEach(({ key }) => {
+        const val = newPlace.tiers[key];
+        tiers[key] = val === "" || val === null ? null : parseFloat(val);
+      });
+
+      // ── Build coords: only send if both lat & lng are valid numbers ──────────
+      let coordsToSend = null;
+      const latVal = parseFloat(newPlace.lat);
+      const lngVal = parseFloat(newPlace.lng);
+      if (newPlace.lat !== "" && newPlace.lng !== "" && !isNaN(latVal) && !isNaN(lngVal)) {
+        coordsToSend = [lngVal, latVal]; // MongoDB format: [longitude, latitude]
+      }
+
+      const payload = {
+        name: newPlace.name.trim(),
+        category: newPlace.category,
+        distance: newPlace.distance || null,
+        coords: coordsToSend,
+        fares: {
+          route:       newPlace.route       || null,
+          route_label: newPlace.route_label || null,
+          distance_km: newPlace.distance_km ? parseFloat(newPlace.distance_km) : null,
+          emergency_provisional_php: newPlace.emergency === "" ? null : parseFloat(newPlace.emergency),
+          tiers,
+        },
+      };
+      const res  = await fetch(`${BACKEND_URL}/api/admin/places`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setPlaces((prev) => [...prev, data.place]);
+        setShowAddModal(false);
+        setNewPlace({
+          name: "", category: "landmark", distance: "",
+    lat: "", lng: "",
+          route: "", route_label: "", distance_km: "",
+          emergency: "",
+          tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
+        });
+        setMessage(`✅ "${data.place.name}" added successfully!`);
+      } else {
+        setMessage(`❌ ${data.message}`);
+      }
+    } catch {
+      setMessage("❌ Error adding place. Check your backend.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    sessionStorage.removeItem("adminLoggedIn");
+    sessionStorage.removeItem("adminGmailToken");
+    sessionStorage.removeItem("adminGmailUser");
+    disconnectGmail();
+    navigate("/");
+  };
+
+  // ── connect Gmail via OAuth ───────────────────────────────────────────────
+  const connectGmail = () => {
+    const clientId    = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    // Use environment variable for production, or dynamically build from current location
+    const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/admin`;
+    const scope       = "https://www.googleapis.com/auth/gmail.send email profile";
+    const authUrl     = `https://accounts.google.com/o/oauth2/v2/auth`
+      + `?client_id=${encodeURIComponent(clientId)}`
+      + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+      + `&response_type=token`
+      + `&scope=${encodeURIComponent(scope)}`
+      + `&prompt=select_account`;
+    window.location.href = authUrl;
+  };
+
+  // ── pick up token from URL hash after OAuth redirect ─────────────────────
+useEffect(() => {
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  const token = params.get("access_token");
+
+  if (!token) return;
+
+  window.history.replaceState(null, "", window.location.pathname);
+
+  fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      const email = (data.email || "").toLowerCase().trim();
+
+      // ✅ ADD ALL ADMINS HERE
+      const ALLOWED_ADMINS = [
+        "estrabelaedison8@gmail.com",
+        "marvinlarosa28@gmail.com",
+        "keanjayvee.gito@sorsu.edu.ph",
+        "triketariffcheckeradmin@gmail.com"
+      ];
+
+      if (ALLOWED_ADMINS.includes(email)) {
+
+        setGmailToken(token);
+        setGmailUser(data.email);
+        setGmailError("");
+        setIsLoggedIn(true);
+        sessionStorage.setItem("adminLoggedIn", "true");
+        sessionStorage.setItem("adminGmailToken", token);
+        sessionStorage.setItem("adminGmailUser", data.email);
+
+      } else {
+
+        setGmailError(
+          `⛔ Access denied. "${data.email}" is not an authorized admin account.`
+        );
+
+        setGmailToken(null);
+        setGmailUser("");
+      }
+    })
+    .catch(() => {
+      setGmailError("❌ Could not verify Gmail account. Please try again.");
+    });
+
+}, []);
+
+  // ── send email via Gmail API ──────────────────────────────────────────────
+  const handleSendEmail = async () => {
+    if (!emailTo || !emailSubject || !emailBody) {
+      setMessage("❌ Please fill in all email fields.");
+      return;
+    }
+    setEmailSending(true);
+    try {
+      const raw = btoa(
+        `To: ${emailTo}\r\nSubject: ${emailSubject}\r\n\r\n${emailBody}`
+      ).replace(/\+/g, "-").replace(/\//g, "_");
+
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method:  "POST",
+        headers: {
+          Authorization:  `Bearer ${gmailToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ raw }),
+      });
+
+      if (res.ok) {
+        setMessage("✅ Email sent successfully!");
+        setEmailTo(""); setEmailSubject(""); setEmailBody("");
+      } else {
+        const err = await res.json();
+        setMessage(`❌ Failed to send email: ${err?.error?.message || "Token may have expired. Reconnect Gmail."}`);
+        if (res.status === 401) { setGmailToken(null); setGmailUser(""); }
+      }
+    } catch {
+      setMessage("❌ Error sending email.");
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // ── disconnect Gmail ──────────────────────────────────────────────────────
+  const disconnectGmail = () => {
+    setGmailToken(null);
+    setGmailUser("");
+    setGmailError("");
+    setEmailTo(""); setEmailSubject(""); setEmailBody("");
+    sessionStorage.removeItem("adminGmailToken");
+    sessionStorage.removeItem("adminGmailUser");
+  };
+
+  const filtered = places.filter((p) => {
+    const matchCat    = filterCat === "all" || p.category === filterCat;
+    const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const isActiveCol = (key) => key === activeTier;
+
+  // Helper: read a tier value from a place document safely
+  // Reads from place.fares.tiers[key]
+  const getTierVal = (place, key) => place.fares?.tiers?.[key];
+
+  // ── login screen ──────────────────────────────────────────────────────────
+  if (!isLoggedIn) {
     return (
-      <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
-        <div className="loading-screen">
+      <div className="admin-container">
+        <div className="login-modal-overlay">
+          <div className="login-modal">
+            <h2 className="login-modal-title">Admin Login</h2>
+            <p style={{ color: "#9ca3af", fontSize: "0.85rem", textAlign: "center", marginBottom: 24 }}>
+              Sign in with the authorized Gmail account to access the dashboard.
+            </p>
 
-          {/* Logo + theme toggle side by side */}
-          <div className="loading-logo-row">
-            <div className="loading-logo-wrap">
-              <img src={isDarkMode ? logoWhite : logoBlack} alt="Trike Logo" className="loading-logo" />
-            </div>
-            <button className="loading-theme-btn" onClick={toggleTheme} title="Toggle theme">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill={isDarkMode ? "white" : "#333"} viewBox="0 0 16 16">
-                <path d="M12 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708" />
+            {/* ── Wrong Gmail error ── */}
+            {gmailError && (
+              <div style={{
+                background: "#3b0000", border: "1px solid #ef4444",
+                borderRadius: 8, padding: "12px 14px", marginBottom: 16,
+                color: "#fca5a5", fontSize: "0.82rem", lineHeight: 1.5,
+              }}>
+                {gmailError}
+                <br />
+                <button
+                  onClick={() => setGmailError("")}
+                  style={{
+                    marginTop: 8, padding: "4px 12px", borderRadius: 6,
+                    border: "1px solid #ef4444", background: "transparent",
+                    color: "#f87171", cursor: "pointer", fontSize: "0.78rem",
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={connectGmail}
+              style={{
+                width: "100%", padding: "12px", borderRadius: 8, border: "none",
+                background: "#4285F4", color: "#fff",
+                fontWeight: 700, cursor: "pointer", fontSize: "1rem",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+                <path fill="#fff" d="M44.5 20H24v8.5h11.7C34.2 33.6 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 2.9l6-6C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
               </svg>
+              Sign in with Google
             </button>
           </div>
-
-          <h1 className="loading-title">TrikeTariffChecker</h1>
-          <div className="loading-bar">
-            <span /><span /><span /><span /><span />
-          </div>
-          <div className="loading-spinner-row">
-            <FaSync className="loading-spin-icon" />
-            <span className="loading-label">Kinukuha ang mga lugar…</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
-        <div className="loading-container">
-          <p style={{ color: "red" }}>{error}</p>
-          <button onClick={fetchPlaces} style={{ marginTop: "12px", padding: "8px 20px", cursor: "pointer" }}>
-            Retry
-          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
-      <div className="tariff-container">
-
-        {/* Header */}
-        <div className="header-row">
-          <div className="sun-icon-btn" onClick={toggleTheme}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={isDarkMode ? "white" : "black"} viewBox="0 0 16 16">
-              <path d="M12 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708" />
-            </svg>
-          </div>
-          <div className="logo-wrapper">
-            <img src={isDarkMode ? logoWhite : logoBlack} alt="Logo" className="brand-logo" />
-          </div>
-          <h1 className="title-text">TrikeTariffChecker</h1>
-          <p className="subtitle-text">Hindi ka maloloko sa presyo</p>
-          <div className="dashed-line"></div>
-        </div>
-
-        {/* Green body panel */}
-        <div className="form-body">
-
-          {/* ── Passenger Type ────────────────────────────────────────────── */}
-          <div className="location-section" style={{ minHeight: "120px", flexShrink: 0 }}>
-            <label className="field-label">
-              Uri ng Pasahero (Passenger Type):
-            </label>
-            <div className="ride-select-wrapper">
-              <select
-                className="ride-select"
-                value={passengerType}
-                onChange={(e) => setPassengerType(e.target.value)}
-              >
-                {PASSENGER_TYPES.map((pt) => (
-                  <option key={pt.value} value={pt.value}>
-                    {pt.label}{pt.discountPercent > 0 ? `  (−${pt.discountPercent}% discount)` : "  (base fare)"}
-                  </option>
-                ))}
-              </select>
-              <FaChevronDown className="ride-select-arrow" />
-            </div>
-            {/* Live discount badge */}
-            <div className={`ride-badge ride-badge--${passengerType}`}>
-              <span className="ride-badge__label">{selectedPassenger.label}</span>
-              <span className="ride-badge__pill">
-                {selectedPassenger.discountPercent === 0
-                  ? "Base fare — walang diskwento"
-                  : `−${selectedPassenger.discountPercent}% diskwento`}
-              </span>
-            </div>
-          </div>
-
-          {/* Origin */}
-          <div className="location-section" ref={originRef}>
-            <label className="field-label"><FaMapMarkerAlt /> Pinagalingan (From):</label>
-            {originSaved ? (
-              <div className="saved-location-row">
-                <div className="saved-location-box">
-                  <FaCheckCircle className="check-icon" />
-                  <span>{originButton}</span>
-                </div>
-                <button className="edit-location-btn" onClick={() => { setOriginSaved(false); setOriginButton(""); setOriginInput(""); setOriginSuggestions([]); }}>
-                  <FaEdit />
-                </button>
-              </div>
-            ) : (
-              <div className="autocomplete-wrapper">
-                <div className="input-row">
-                  <input
-                    type="text"
-                    className="location-input"
-                    placeholder="I-type ang pinagalingan..."
-                    value={originInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setOriginInput(val);
-                      const suggestions = val.trim() ? filterPlaces(val) : [];
-                      setOriginSuggestions(suggestions);
-                      setOriginActiveIndex(suggestions.length > 0 ? 0 : -1);
-                    }}
-                    onKeyDown={handleOriginKeyDown}
-                    autoComplete="off"
-                  />
-                  <button className="pick-btn" onClick={() => openModal("origin")}>Pumili</button>
-                </div>
-
-                {/* ── GPS locate button ─────────────────────────────────── */}
-                <button
-                  className={`locate-btn${locating ? " locate-btn--loading" : ""}`}
-                  onClick={handleGetLocation}
-                  disabled={locating}
-                  title="Gamitin ang aking kasalukuyang lokasyon"
-                >
-                  {locating
-                    ? <FaSync className="locate-spin" />
-                    : <FaCrosshairs className="locate-icon" />}
-                  <span>{locating ? "Hinahanap ang iyong lokasyon…" : "Gamitin ang aking lokasyon"}</span>
-                </button>
-
-                {locError && (
-                  <p className="locate-error">{locError}</p>
-                )}
-
-                {originSuggestions.length > 0 && (
-                  <ul className="autocomplete-dropdown">
-                    {originSuggestions.map((name, i) => (
-                      <li
-                        key={name}
-                        className={`autocomplete-item${i === originActiveIndex ? " autocomplete-item--active" : ""}`}
-                        onMouseDown={() => selectSuggestion("origin", name)}
-                        onMouseEnter={() => setOriginActiveIndex(i)}
-                      >
-                        <FaMapMarkerAlt className="autocomplete-pin" />
-                        <span>{name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Destination */}
-          <div className="location-section" ref={destinationRef}>
-            <label className="field-label"><FaMapMarkerAlt /> Paroroonan (To):</label>
-            {destinationSaved ? (
-              <div className="saved-location-row">
-                <div className="saved-location-box">
-                  <FaCheckCircle className="check-icon" />
-                  <span>{destinationButton}</span>
-                </div>
-                <button className="edit-location-btn" onClick={() => { setDestinationSaved(false); setDestinationButton(""); setDestinationInput(""); setDestinationSuggestions([]); }}>
-                  <FaEdit />
-                </button>
-              </div>
-            ) : (
-              <div className="autocomplete-wrapper">
-                <div className="input-row">
-                  <input
-                    type="text"
-                    className="location-input"
-                    placeholder="I-type ang paroroonan..."
-                    value={destinationInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDestinationInput(val);
-                      const suggestions = val.trim() ? filterPlaces(val) : [];
-                      setDestinationSuggestions(suggestions);
-                      setDestinationActiveIndex(suggestions.length > 0 ? 0 : -1);
-                    }}
-                    onKeyDown={handleDestinationKeyDown}
-                    autoComplete="off"
-                  />
-                  <button className="pick-btn" onClick={() => openModal("destination")}>Pumili</button>
-                </div>
-                {destinationSuggestions.length > 0 && (
-                  <ul className="autocomplete-dropdown autocomplete-dropdown--up">
-                    {destinationSuggestions.map((name, i) => (
-                      <li
-                        key={name}
-                        className={`autocomplete-item${i === destinationActiveIndex ? " autocomplete-item--active" : ""}`}
-                        onMouseDown={() => selectSuggestion("destination", name)}
-                        onMouseEnter={() => setDestinationActiveIndex(i)}
-                      >
-                        <FaMapMarkerAlt className="autocomplete-pin" />
-                        <span>{name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Calculate Button */}
-          {nearbyMsg && (
-            <div className="nearby-msg">
-              <span className="nearby-msg__icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
-                </svg>
-              </span>
-              <span>{nearbyMsg}</span>
-            </div>
-          )}
-          <button className="calculate-btn" onClick={handleCalculate}>
-            Kalkulahin ang Pamasahe
-          </button>
-
+    <div className="admin-container">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 className="admin-title">Admin Dashboard</h1>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </div>
 
-      {/* Pumili Modal */}
-      {isModalOpen && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className={`modal-box ${isDarkMode ? "modal-dark" : "modal-light"}`} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-handle" />
-            <div className="modal-header-row">
-              <div className="modal-type-badge">
-                <FaMapMarkerAlt />
-                <span>{modalType === "origin" ? "Pinagalingan" : "Paroroonan"}</span>
-              </div>
-              <button className="modal-x-btn" onClick={closeModal}>✕</button>
+      {message && <div className="success-message">{message}</div>}
+
+      {/* ── TABS ── */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button
+          onClick={() => setActiveTab("places")}
+          style={{
+            padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: activeTab === "places" ? "#22c55e" : "#333", color: "#fff", fontWeight: 600,
+          }}
+        >
+          📍 Places & Fares
+        </button>
+        
+      </div>
+
+      {activeTab === "places" && (
+        <>
+          {/* ── GASOLINE TIER SELECTOR ──────────────────────────────────────── */}
+          <div style={{
+            background: "#111827",
+            border: "1px solid #374151",
+            borderRadius: 12,
+            padding: "14px 18px",
+            marginBottom: 20,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <span style={{ color: "#9ca3af", fontSize: "0.82rem", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                ⛽ Active Gasoline Tier
+              </span>
+              <span style={{
+                background: "#1f2937", color: "#6ee7b7",
+                fontSize: "0.75rem", padding: "2px 10px",
+                borderRadius: 20, border: "1px solid #374151",
+              }}>
+                Saved to MongoDB · Shown on Checker Page
+              </span>
+              {tierSaving && (
+                <span style={{ color: "#facc15", fontSize: "0.75rem" }}>⏳ Saving to database...</span>
+              )}
             </div>
-            <h3 className="modal-title">
-              {modalType === "origin" ? "Saan ka galing?" : "Saan ka pupunta?"}
-            </h3>
-            <div className="modal-search-wrapper">
-              <FaMapMarkerAlt className="modal-search-icon" />
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {TIER_BUTTONS.map(({ key, label }) => {
+                const isActive = isActiveCol(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleTierChange(key)}
+                    disabled={tierSaving}
+                    style={{
+                      padding: "8px 16px", borderRadius: 8,
+                      border:      isActive ? "2px solid #22c55e" : "2px solid #374151",
+                      background:  isActive ? "#14532d"           : "#1f2937",
+                      color:       isActive ? "#4ade80"           : "#9ca3af",
+                      fontWeight:  isActive ? 700                 : 500,
+                      fontSize: "0.85rem",
+                      cursor: tierSaving ? "not-allowed" : "pointer",
+                      transition: "all 0.15s ease",
+                      boxShadow: isActive ? "0 0 0 3px rgba(34,197,94,0.2)" : "none",
+                      position: "relative",
+                      opacity: tierSaving && !isActive ? 0.5 : 1,
+                    }}
+                  >
+                    {label}
+                    {isActive && (
+                      <span style={{
+                        position: "absolute", top: -8, right: -6,
+                        background: "#22c55e", color: "#000",
+                        fontSize: "0.6rem", fontWeight: 800,
+                        padding: "1px 5px", borderRadius: 10,
+                      }}>
+                        ACTIVE
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p style={{ color: "#6b7280", fontSize: "0.75rem", marginTop: 10, marginBottom: 0 }}>
+              This setting is persisted in MongoDB Atlas. Every passenger will see fares based on the active tier — no browser storage used.
+            </p>
+          </div>
+
+          {/* ── ADD PLACE BUTTON ────────────────────────────────────────── */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{
+                padding: "9px 20px", borderRadius: 8, border: "none",
+                background: "#22c55e", color: "#000",
+                fontWeight: 700, cursor: "pointer", fontSize: "0.9rem",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              ➕ Add New Place
+            </button>
+          </div>
+
+          {/* ── FILTERS ─────────────────────────────────────────────────────── */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="🔍 Search place..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", flex: 1, minWidth: 180 }}
+            />
+            <select
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff" }}
+            >
+              <option value="all">All Categories</option>
+              <option value="landmark">Landmark</option>
+              <option value="poblacion">Poblacion</option>
+              <option value="barangay">Barangay</option>
+              <option value="sitio">Sitio</option>
+              <option value="food">Food</option>
+              <option value="hospital">Hospital</option>
+              <option value="government">Government</option>
+              <option value="market">Market</option>
+              <option value="school">School</option>
+              <option value="supermarket">Supermarket</option>
+              <option value="convenience_store">Convenience Store</option>
+              <option value="terminal">Terminal</option>
+              <option value="port">Port</option>
+              <option value="resort">Resort</option>
+            </select>
+            <span style={{ color: "#aaa", alignSelf: "center" }}>{filtered.length} places</span>
+          </div>
+
+          {/* ── PLACES TABLE ────────────────────────────────────────────────── */}
+          <div style={{ overflowX: "auto", minHeight: "500px", display: "flex", flexDirection: "column" }}>
+            <table className="tariff-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Distance</th>
+                  <th
+                    title="Emergency / Provisional fare"
+                    style={{ whiteSpace: "nowrap", color: "#facc15" }}
+                  >
+                    🚨 Emerg.
+                  </th>
+                  {[
+                    { key: "50-59", label: "₱50–59" },
+                    { key: "60-69", label: "₱60–69" },
+                    { key: "70-79", label: "₱70–79" },
+                    { key: "80-89", label: "₱80–89" },
+                    { key: "90-99", label: "₱90–99" },
+                  ].map(({ key, label }) => (
+                    <th
+                      key={key}
+                      onClick={() => handleTierChange(key)}
+                      title={`Set "${label}" as active tier`}
+                      style={{
+                        cursor: "pointer",
+                        background:   isActiveCol(key) ? "#14532d"           : undefined,
+                        color:        isActiveCol(key) ? "#4ade80"           : undefined,
+                        borderBottom: isActiveCol(key) ? "3px solid #22c55e" : undefined,
+                        userSelect: "none", whiteSpace: "nowrap",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      {label}
+                      {isActiveCol(key) && (
+                        <span style={{ marginLeft: 4, fontSize: "0.65rem", opacity: 0.8 }}>▲</span>
+                      )}
+                    </th>
+                  ))}
+                  <th>Coords</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && filtered.length === 0 ? (
+                  <tr><td colSpan="12" className="empty">Loading...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan="12" className="empty">No places found.</td></tr>
+                ) : (
+                  filtered.map((place) => (
+                    <tr key={place._id}>
+                      <td>{place.name}</td>
+                      <td>
+                        <span style={{
+                          padding: "2px 8px", borderRadius: 12, fontSize: "0.75rem", fontWeight: 600,
+                          background: place.category === "barangay"         ? "#1d4ed8"
+                            : place.category === "poblacion"     ? "#7c3aed"
+                            : place.category === "landmark"      ? "#b45309"
+                            : place.category === "hospital"      ? "#991b1b"
+                            : place.category === "food"          ? "#92400e"
+                            : place.category === "market"        ? "#065f46"
+                            : place.category === "school"        ? "#1e3a5f"
+                            : place.category === "convenience_store" ? "#0e7490"
+                            : "#065f46",
+                          color: "#fff",
+                        }}>
+                          {place.category}
+                        </span>
+                      </td>
+                      <td>{place.distance ?? (place.fares?.distance_km ? `${place.fares.distance_km} km` : "—")}</td>
+
+                      {/* Emergency / Provisional */}
+                      <td style={{ color: "#facc15", fontWeight: 600 }}>
+                        {place.fares?.emergency_provisional_php != null
+                          ? `₱${place.fares.emergency_provisional_php}`
+                          : "—"}
+                      </td>
+
+                      {/* Gas tier columns — read from fares.tiers */}
+                      {["50-59", "60-69", "70-79", "80-89", "90-99"].map((key) => {
+                        const val = getTierVal(place, key);
+                        return (
+                          <td
+                            key={key}
+                            style={{
+                              background:  isActiveCol(key) ? "rgba(20,83,45,0.45)" : undefined,
+                              color:       isActiveCol(key) ? "#4ade80"             : undefined,
+                              fontWeight:  isActiveCol(key) ? 700                   : undefined,
+                              borderLeft:  isActiveCol(key) ? "2px solid #22c55e"  : undefined,
+                              borderRight: isActiveCol(key) ? "2px solid #22c55e"  : undefined,
+                            }}
+                          >
+                            {val != null ? `₱${val}` : "—"}
+                          </td>
+                        );
+                      })}
+
+                      <td style={{ fontSize: "0.72rem", color: "#6b7280", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(5)}, ${Number(place.coords[0]).toFixed(5)}` : ""}>
+                        {(() => { try { return place.coords && place.coords.length >= 2 ? `${Number(place.coords[1]).toFixed(3)}, ${Number(place.coords[0]).toFixed(3)}` : "—"; } catch(e) { return "—"; } })()}
+                      </td>
+                     <td
+                        style={{
+                          display: "flex",
+                          gap: "6px",
+                          flexWrap: "wrap",
+                          whiteSpace: "normal"
+                        }}
+                      >
+                        <button className="edit-btn" onClick={() => openEdit(place)}>Edit</button>
+                        <button className="delete-btn" onClick={() => handleDelete(place)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ── GMAIL TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === "gmail" && (
+        <div style={{ maxWidth: 540 }}>
+          <h2 style={{ color: "#22c55e", marginBottom: 4 }}>📧 Send Email</h2>
+          <p style={{ color: "#6b7280", fontSize: "0.8rem", marginBottom: 20 }}>
+            Only <strong style={{ color: "#e5e7eb" }}>{ALLOWED_ADMIN_GMAIL}</strong> is authorized to connect.
+          </p>
+
+          {/* ── Error: wrong Gmail ── */}
+          {gmailError && (
+            <div style={{
+              background: "#3b0000", border: "1px solid #ef4444",
+              borderRadius: 10, padding: "14px 18px", marginBottom: 20,
+              color: "#fca5a5", fontSize: "0.9rem", lineHeight: 1.5,
+            }}>
+              {gmailError}
+              <br />
+              <button
+                onClick={() => setGmailError("")}
+                style={{
+                  marginTop: 10, padding: "6px 14px", borderRadius: 6,
+                  border: "1px solid #ef4444", background: "transparent",
+                  color: "#f87171", cursor: "pointer", fontSize: "0.8rem",
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* ── Not connected ── */}
+          {!gmailToken && !gmailError && (
+            <div style={{
+              background: "#111827", border: "1px solid #374151",
+              borderRadius: 12, padding: "32px", textAlign: "center",
+            }}>
+              <p style={{ color: "#9ca3af", marginBottom: 20, fontSize: "0.9rem" }}>
+                Connect the authorized Gmail account to send emails from this dashboard.
+              </p>
+              <button
+                onClick={connectGmail}
+                style={{
+                  padding: "10px 28px", borderRadius: 8, border: "none",
+                  background: "#4285F4", color: "#fff",
+                  fontWeight: 700, cursor: "pointer", fontSize: "1rem",
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+                  <path fill="#fff" d="M44.5 20H24v8.5h11.7C34.2 33.6 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 2.9l6-6C34.4 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
+                </svg>
+                Connect Gmail Account
+              </button>
+            </div>
+          )}
+
+          {/* ── Connected — send form ── */}
+          {gmailToken && (
+            <div>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: "#052e16", border: "1px solid #22c55e",
+                borderRadius: 10, padding: "10px 16px", marginBottom: 20,
+              }}>
+                <span style={{ color: "#4ade80", fontSize: "0.88rem" }}>
+                  ✅ Connected as <strong>{gmailUser}</strong>
+                </span>
+                <button
+                  onClick={disconnectGmail}
+                  style={{
+                    padding: "4px 12px", borderRadius: 6,
+                    border: "1px solid #374151", background: "#1f2937",
+                    color: "#9ca3af", cursor: "pointer", fontSize: "0.75rem",
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: "0.8rem", display: "block", marginBottom: 4 }}>To</label>
+                  <input
+                    type="email" placeholder="recipient@email.com" value={emailTo}
+                    onChange={(e) => setEmailTo(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #374151", background: "#1e1e1e", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Subject</label>
+                  <input
+                    type="text" placeholder="Email subject" value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #374151", background: "#1e1e1e", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Message</label>
+                  <textarea
+                    placeholder="Write your message here..." value={emailBody} rows={7}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #374151", background: "#1e1e1e", color: "#fff", resize: "vertical", boxSizing: "border-box" }}
+                  />
+                </div>
+                <button
+                  onClick={handleSendEmail} disabled={emailSending}
+                  style={{
+                    padding: "11px", borderRadius: 8, border: "none",
+                    background: emailSending ? "#374151" : "#22c55e",
+                    color: emailSending ? "#9ca3af" : "#000",
+                    fontWeight: 700, cursor: emailSending ? "not-allowed" : "pointer",
+                    fontSize: "1rem", transition: "all 0.15s",
+                  }}
+                >
+                  {emailSending ? "⏳ Sending..." : "📤 Send Email"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ADD PLACE MODAL ──────────────────────────────────────────────────── */}
+      {showAddModal && (
+        <div className="login-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
+          <div className="login-modal" style={{ maxWidth: 500, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <h3 style={{ marginBottom: 16, color: "#22c55e" }}>➕ Add New Place</h3>
+
+            {/* Name */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Place Name *</label>
               <input
                 type="text"
-                className="modal-search"
-                placeholder="Maghanap ng lugar..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                autoFocus
+                value={newPlace.name}
+                onChange={(e) => setNewPlace((p) => ({ ...p, name: e.target.value }))}
+                placeholder="e.g. Barangay San Jose"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
               />
-              {searchTerm && (
-                <button className="modal-search-clear" onClick={() => setSearchTerm("")}>✕</button>
-              )}
             </div>
-            {searchTerm && (
-              <p className="modal-result-count">{filteredModalPlaces.length} lugar ang nahanap</p>
-            )}
-            <div className="modal-list">
-              {filteredModalPlaces.length === 0 ? (
-                <div className="modal-empty-state">
-                  <span className="modal-empty-icon">🔍</span>
-                  <p>Walang nahanap na lugar</p>
-                  <span>Subukang ibang salita</span>
+
+            {/* Category */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Category *</label>
+              <select
+                value={newPlace.category}
+                onChange={(e) => setNewPlace((p) => ({ ...p, category: e.target.value }))}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              >
+                <option value="landmark">Landmark</option>
+                <option value="poblacion">Poblacion</option>
+                <option value="barangay">Barangay</option>
+                <option value="sitio">Sitio</option>
+                <option value="food">Food</option>
+                <option value="hospital">Hospital</option>
+                <option value="government">Government</option>
+                <option value="market">Market</option>
+                <option value="school">School</option>
+                <option value="supermarket">Supermarket</option>
+                <option value="convenience_store">Convenience Store</option>
+                <option value="terminal">Terminal</option>
+                <option value="port">Port</option>
+                <option value="resort">Resort</option>
+              </select>
+            </div>
+
+            {/* Distance display */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Distance (display string)</label>
+              <input
+                type="text"
+                value={newPlace.distance}
+                onChange={(e) => setNewPlace((p) => ({ ...p, distance: e.target.value }))}
+                placeholder="e.g. 3.5 km"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              />
+            </div>
+
+            {/* Coordinates */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600 }}>📍 Coordinates</label>
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Latitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newPlace.lat}
+                    onChange={(e) => setNewPlace((p) => ({ ...p, lat: e.target.value }))}
+                    placeholder="e.g. 12.97340"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
+                  />
                 </div>
-              ) : (
-                filteredModalPlaces.map((place) => (
-                  <button key={place} className="modal-item" onClick={() => handleSetLocation(place)}>
-                    <span className="modal-item-icon"><FaMapMarkerAlt /></span>
-                    <span className="modal-item-name">{place}</span>
-                    <span className="modal-item-arrow">›</span>
-                  </button>
-                ))
-              )}
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Longitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newPlace.lng}
+                    onChange={(e) => setNewPlace((p) => ({ ...p, lng: e.target.value }))}
+                    placeholder="e.g. 123.52690"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+              <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>Saved as [longitude, latitude] in MongoDB Atlas</p>
             </div>
-            <button className="modal-close-btn" onClick={closeModal}>Isara</button>
+
+           
+            {/* Emergency fare */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#facc15", fontSize: "0.85rem", fontWeight: 600 }}>🚨 Emergency / Provisional Fare (₱)</label>
+              <input
+                type="number"
+                value={newPlace.emergency}
+                onChange={(e) => setNewPlace((p) => ({ ...p, emergency: e.target.value }))}
+                placeholder="null"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #facc15", background: "#1e1e1e", color: "#fff", marginTop: 4, boxSizing: "border-box" }}
+              />
+            </div>
+
+            {/* Fare tiers */}
+            <p style={{ color: "#aaa", fontSize: "0.85rem", marginBottom: 8 }}>⛽ Gasoline Fare Tiers (₱)</p>
+            {FARE_KEYS.map(({ key, label }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <label style={{
+                  color: isActiveCol(key) ? "#4ade80" : "#ccc",
+                  fontSize: "0.85rem", width: 160, flexShrink: 0,
+                  fontWeight: isActiveCol(key) ? 700 : 400,
+                }}>
+                  {label}
+                  {isActiveCol(key) && (
+                    <span style={{ marginLeft: 6, fontSize: "0.65rem", background: "#14532d", padding: "1px 6px", borderRadius: 8, border: "1px solid #22c55e" }}>
+                      ACTIVE
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  value={newPlace.tiers[key] ?? ""}
+                  onChange={(e) => setNewPlace((p) => ({ ...p, tiers: { ...p.tiers, [key]: e.target.value } }))}
+                  placeholder="null"
+                  style={{
+                    flex: 1, padding: "6px 10px", borderRadius: 8,
+                    border:     isActiveCol(key) ? "1px solid #22c55e" : "1px solid #444",
+                    background: isActiveCol(key) ? "#0d1f13"           : "#1e1e1e",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button className="add-btn" onClick={handleAddPlace} disabled={loading} style={{ flex: 1 }}>
+                {loading ? "Saving..." : "💾 Save Place"}
+              </button>
+              <button className="cancel-btn" onClick={() => setShowAddModal(false)} style={{ flex: 1 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT MODAL ───────────────────────────────────────────────────────── */}
+      {editPlace && (
+        <div className="login-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setEditPlace(null); }}>
+          <div className="login-modal" style={{ maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+            <h3 style={{ marginBottom: 16, color: "#22c55e" }}>✏️ Edit: {editPlace.name}</h3>
+
+            {/* Route info (read-only) */}
+            {editPlace.fares?.route && (
+              <div style={{
+                background: "#1f2937", borderRadius: 8, padding: "8px 12px",
+                marginBottom: 12, fontSize: "0.8rem", color: "#9ca3af",
+              }}>
+                🛣 Route: <strong style={{ color: "#e5e7eb" }}>{editPlace.fares.route_label || editPlace.fares.route}</strong>
+                {editPlace.fares.distance_km && (
+                  <span> · {editPlace.fares.distance_km} km</span>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#aaa", fontSize: "0.85rem" }}>Distance (display string)</label>
+              <input
+                type="text"
+                value={editDist}
+                onChange={(e) => setEditDist(e.target.value)}
+                placeholder="e.g. 3.5 km"
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #444", background: "#1e1e1e", color: "#fff", marginTop: 4 }}
+              />
+            </div>
+
+            {/* Coordinates */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600 }}>📍 Coordinates</label>
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Latitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editLat}
+                    onChange={(e) => setEditLat(e.target.value)}
+                    placeholder="e.g. 12.97340"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#9ca3af", fontSize: "0.75rem", display: "block", marginBottom: 3 }}>Longitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editLng}
+                    onChange={(e) => setEditLng(e.target.value)}
+                    placeholder="e.g. 123.52690"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #22c55e", background: "#0d1f13", color: "#fff", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+              <p style={{ color: "#6b7280", fontSize: "0.72rem", marginTop: 4 }}>
+                MongoDB stores as [longitude, latitude]. Current:{" "}
+                {(() => {
+                  const c = Array.isArray(editPlace?.coords)
+                    ? editPlace.coords
+                    : editPlace?.coords?.coordinates ?? null;
+                  return c ? `[${c[0]}, ${c[1]}]` : "none";
+                })()}
+                {editLat !== "" && editLng !== "" && !isNaN(parseFloat(editLat)) && !isNaN(parseFloat(editLng)) && (
+                  <span style={{ color: "#4ade80", marginLeft: 6 }}>
+                    → Will save: [{parseFloat(editLng)}, {parseFloat(editLat)}]
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Emergency provisional fare */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#facc15", fontSize: "0.85rem", fontWeight: 600 }}>
+                🚨 Emergency / Provisional Fare (₱)
+              </label>
+              <input
+                type="number"
+                value={editEmergency}
+                onChange={(e) => setEditEmergency(e.target.value)}
+                placeholder="null"
+                style={{
+                  width: "100%", padding: "8px 12px", borderRadius: 8,
+                  border: "1px solid #facc15", background: "#1e1e1e", color: "#fff", marginTop: 4,
+                }}
+              />
+            </div>
+
+            <p style={{ color: "#aaa", fontSize: "0.85rem", marginBottom: 8 }}>⛽ Gasoline Fare Tiers (₱)</p>
+            {FARE_KEYS.map(({ key, label }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <label style={{
+                  color: isActiveCol(key) ? "#4ade80" : "#ccc",
+                  fontSize: "0.85rem", width: 160, flexShrink: 0,
+                  fontWeight: isActiveCol(key) ? 700 : 400,
+                }}>
+                  {label}
+                  {isActiveCol(key) && (
+                    <span style={{ marginLeft: 6, fontSize: "0.65rem", background: "#14532d", padding: "1px 6px", borderRadius: 8, border: "1px solid #22c55e" }}>
+                      ACTIVE
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  value={editTiers[key] ?? ""}
+                  onChange={(e) => setEditTiers((prev) => ({ ...prev, [key]: e.target.value }))}
+                  placeholder="null"
+                  style={{
+                    flex: 1, padding: "6px 10px", borderRadius: 8,
+                    border:     isActiveCol(key) ? "1px solid #22c55e" : "1px solid #444",
+                    background: isActiveCol(key) ? "#0d1f13"           : "#1e1e1e",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button className="add-btn"    onClick={handleSave} disabled={loading} style={{ flex: 1 }}>
+                {loading ? "Saving..." : "💾 Save Changes"}
+              </button>
+              <button className="cancel-btn" onClick={() => setEditPlace(null)} style={{ flex: 1 }}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
