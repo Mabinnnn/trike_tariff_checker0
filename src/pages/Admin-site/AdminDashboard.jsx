@@ -26,7 +26,9 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
 
   // ── auth ──────────────────────────────────────────────────────────────────
-  const [isLoggedIn,  setIsLoggedIn]  = useState(false);
+  const [isLoggedIn,  setIsLoggedIn]  = useState(() => {
+    return sessionStorage.getItem("adminLoggedIn") === "true";
+  });
 
   // ── ui state ──────────────────────────────────────────────────────────────
   const [activeTab,   setActiveTab]   = useState("places");
@@ -39,8 +41,8 @@ export default function AdminDashboard() {
   const [tierSaving,  setTierSaving]  = useState(false);
 
   // ── gmail state ───────────────────────────────────────────────────────────
-  const [gmailToken,    setGmailToken]    = useState(null);
-  const [gmailUser,     setGmailUser]     = useState("");
+  const [gmailToken,    setGmailToken]    = useState(() => sessionStorage.getItem("adminGmailToken") || null);
+  const [gmailUser,     setGmailUser]     = useState(() => sessionStorage.getItem("adminGmailUser") || "");
   const [gmailError,    setGmailError]    = useState("");
   const [emailTo,       setEmailTo]       = useState("");
   const [emailSubject,  setEmailSubject]  = useState("");
@@ -284,6 +286,9 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    sessionStorage.removeItem("adminLoggedIn");
+    sessionStorage.removeItem("adminGmailToken");
+    sessionStorage.removeItem("adminGmailUser");
     disconnectGmail();
     navigate("/");
   };
@@ -324,7 +329,8 @@ useEffect(() => {
       const ALLOWED_ADMINS = [
         "estrabelaedison8@gmail.com",
         "marvinlarosa28@gmail.com",
-        "keanjayvee.gito@sorsu.edu.ph"
+        "keanjayvee.gito@sorsu.edu.ph",
+        "triketariffcheckeradmin@gmail.com"
       ];
 
       if (ALLOWED_ADMINS.includes(email)) {
@@ -333,6 +339,9 @@ useEffect(() => {
         setGmailUser(data.email);
         setGmailError("");
         setIsLoggedIn(true);
+        sessionStorage.setItem("adminLoggedIn", "true");
+        sessionStorage.setItem("adminGmailToken", token);
+        sessionStorage.setItem("adminGmailUser", data.email);
 
       } else {
 
@@ -392,6 +401,8 @@ useEffect(() => {
     setGmailUser("");
     setGmailError("");
     setEmailTo(""); setEmailSubject(""); setEmailBody("");
+    sessionStorage.removeItem("adminGmailToken");
+    sessionStorage.removeItem("adminGmailUser");
   };
 
   const filtered = places.filter((p) => {
