@@ -127,7 +127,7 @@ export default function Checkerpage() {
     const lower = value.trim().toLowerCase();
     return places
       .map((p) => p.name)
-      .filter((name) => name.toLowerCase().startsWith(lower));
+      .filter((name) => name.toLowerCase().includes(lower));
   };
   
   const SHORT_TRIP_FLAT_FARE = 20;  // ₱20 for trips 0.0-2.0 km
@@ -177,12 +177,23 @@ export default function Checkerpage() {
     const destPlace = places.find((p) => p.name === destination);
 
     // ── Check distance between places for short trip flat fare ───────────────
-    // If distance is 0.0-2.0 km, apply ₱20 flat fare
+    // IMPORTANT: Use the stored fares.distance_km (actual road distance from admin/MongoDB)
+    // as the primary distance check. Only fall back to Haversine straight-line distance
+    // when neither place has a stored route distance.
+    // This prevents misclassifying long road routes as "short trips" just because
+    // two places are geographically close but far apart by road.
+    const origKm = getPlaceKm(origPlace);
+    const destKm = getPlaceKm(destPlace);
+    const maxStoredKm = Math.max(origKm, destKm);
+
     const coordsA = getCoords(origPlace);
     const coordsB = getCoords(destPlace);
     const geoDistance = getDistanceKmFromCoords(coordsA, coordsB);
 
-    if (geoDistance != null && geoDistance > 0.1 && geoDistance <= SHORT_TRIP_MAX_KM) {
+    // Use stored road distance if available (more accurate); else fall back to Haversine
+    const effectiveDistance = maxStoredKm > 0 ? maxStoredKm : geoDistance;
+
+    if (effectiveDistance != null && effectiveDistance > 0.1 && effectiveDistance <= SHORT_TRIP_MAX_KM) {
       const baseFare = SHORT_TRIP_FLAT_FARE;
       const tierKey = activeTier ?? "50-59";
       return {
@@ -194,8 +205,8 @@ export default function Checkerpage() {
         "80-89": baseFare, "90-99": baseFare,
         route: "Short Trip",
         route_label: `Short Trip ≤ ${SHORT_TRIP_MAX_KM} km (Flat Rate ₱${SHORT_TRIP_FLAT_FARE})`,
-        distance_km: parseFloat(geoDistance.toFixed(2)),
-        distance: `${geoDistance.toFixed(1)} km`,
+        distance_km: parseFloat(effectiveDistance.toFixed(2)),
+        distance: `${effectiveDistance.toFixed(1)} km`,
       };
     }
     // Distance > 2.0 km → use original database fare below
