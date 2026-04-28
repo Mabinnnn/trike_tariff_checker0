@@ -404,7 +404,7 @@ export default function Checkerpage() {
     const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
 
     const baseFare            = routeData?.baseFare ?? null;
-    const effectiveMultiplier = routeData?.isShortTripFlat ? 1.00 : selectedPassenger.multiplier;
+    const effectiveMultiplier = selectedPassenger.multiplier;
     const finalFare           = applyMultiplier(baseFare, effectiveMultiplier);
     const fareDecrease        = (baseFare != null && finalFare != null) ? baseFare - finalFare : null;
 
