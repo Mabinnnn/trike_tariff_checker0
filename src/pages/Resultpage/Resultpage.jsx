@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "./Resultpage.css";
 import { FaCheckCircle } from "react-icons/fa";
 import RouteMapChecker from "../../components/RouteMapChecker/RouteMapChecker";
+import { calculateFare } from "../../api/api";
 
 import logoWhite from "../../assets/Logowhite-removebg-preview.png";
 import logoBlack from "../../assets/Logoblack-removebg-preview.png";
@@ -21,14 +22,23 @@ export default function Resultpage() {
     return saved !== null ? saved === "dark" : true;
   });
   const [showRouteMap, setShowRouteMap] = useState(false);
+  const [resultLoading, setResultLoading] = useState(false);
+  const [resultError, setResultError] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { origin, destination, fareInfo } = location.state || {
-    origin:      "N/A",
-    destination: "N/A",
-    fareInfo:    null,
-  };
+  const searchParams = new URLSearchParams(location.search);
+  const queryOrigin = searchParams.get("origin");
+  const queryDestination = searchParams.get("destination");
+
+  const initialState = location.state || {};
+  const [resultData, setResultData] = useState({
+    origin:      initialState.origin || queryOrigin || "N/A",
+    destination: initialState.destination || queryDestination || "N/A",
+    fareInfo:    initialState.fareInfo || null,
+  });
+
+  const { origin, destination, fareInfo } = resultData;
 
   const toggleTheme = () => {
     const next = !isDarkMode;
@@ -38,42 +48,6 @@ export default function Resultpage() {
   const handleDone  = () => navigate("/");
 
   // ── Fare values ────────────────────────────────────────────────────────────
-  const baseFare       = fareInfo?.baseFare       ?? fareInfo?.activeFare ?? null;
-  const finalFare      = fareInfo?.finalFare      ?? baseFare;             // final after multiplier
-  const fareIncrease   = fareInfo?.fareIncrease   ?? 0;
-  const increasePercent = fareInfo?.increasePercent ?? 0;
-  const rideLabel      = fareInfo?.rideLabel      ?? "☀️ Sharing (Sabay-sakay)";
-  const rideType       = fareInfo?.rideType       ?? "sharing";
-
-  const tierLabel      = fareInfo?.activeTier ? TIER_LABELS[fareInfo.activeTier] : null;
-  const routeLabel     = fareInfo?.route_label || fareInfo?.route || null;
-  const distanceKm     = fareInfo?.distance_km || fareInfo?.distance || null;
-  const emergencyFare  = fareInfo?.emergency_provisional_php;
-
-  // ── Breakdown rows ─────────────────────────────────────────────────────────
-  // Shows: Kondisyon | Halaga | Dagdag | Porsyento
-  const breakdownRows = fareInfo
-    ? [
-        {
-          label:   `Base fare${tierLabel ? ` (${tierLabel})` : ""}`,
-          amount:  baseFare,
-          increase: "—",
-          percent: "0%",
-          isBase:  true,
-        },
-        ...(fareIncrease > 0
-          ? [{
-              label:    rideLabel,
-              amount:   fareIncrease,
-              increase: `+₱${fareIncrease}`,
-              percent:  `+${increasePercent}%`,
-              isBase:   false,
-            }]
-          : []),
-      ]
-    : [];
-
-  const hasFare = finalFare != null;
 
   return (
     <div className={`result-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
@@ -124,19 +98,26 @@ export default function Resultpage() {
               <span>Tricycle Fare</span>
             </div>
 
-            {/* Ride type label */}
-            {fareInfo && (
-              <p className="result-ride-label">{rideLabel}</p>
+            {/* Passenger type pill — uses .result-ride-label */}
+            {fareInfo?.rideLabel && (
+              <div className="result-ride-label">
+                {fareInfo.rideLabel}
+                {fareInfo.discountPercent > 0 && ` · −${fareInfo.discountPercent}% discount`}
+              </div>
             )}
 
             {/* Big fare amount */}
-            <div className={`fare-display-box${!hasFare ? " no-fare" : ""}`}>
-              {hasFare
-                ? <span>₱{finalFare}</span>
-                : <span>Walang datos</span>
-              }
+            <div className={`fare-display-box${!fareInfo?.finalFare ? " no-fare" : ""}`}>
+              {resultLoading ? (
+                <span>Naglo-load ng resulta…</span>
+              ) : resultError ? (
+                <span>{resultError}</span>
+              ) : fareInfo?.finalFare != null ? (
+                <span>₱{fareInfo.finalFare}</span>
+              ) : (
+                <span>Walang datos</span>
+              )}
             </div>
-
 
             <div className="button-group">
               <button

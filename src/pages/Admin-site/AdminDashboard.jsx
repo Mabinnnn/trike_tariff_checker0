@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminDashboard.css";
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+import {
+  adminGetPlaces,
+  adminGetActiveTier,
+  adminSetActiveTier,
+  adminUpdatePlace,
+  adminDeletePlace,
+  adminAddPlace,
+} from "../../api/api";
 
 // ── NEW: tier keys now match fares.tiers keys in MongoDB ─────────────────────
 // "50-59" | "60-69" | "70-79" | "80-89" | "90-99"
@@ -74,9 +80,8 @@ export default function AdminDashboard() {
   const fetchPlaces = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/admin/places`);
-      const data = await res.json();
-      if (data.status === "success") setPlaces(data.places);
+      const places = await adminGetPlaces();
+      setPlaces(places);
     } catch {
       setMessage("❌ Error loading places");
     } finally {
@@ -87,11 +92,8 @@ export default function AdminDashboard() {
   // ── fetch active tier from MongoDB ────────────────────────────────────────
   const fetchActiveTier = async () => {
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`);
-      const data = await res.json();
-      if (data.status === "success" && data.activeTier) {
-        setActiveTier(data.activeTier);
-      }
+      const tier = await adminGetActiveTier();
+      setActiveTier(tier);
     } catch {
       // silently keep default
     }
@@ -109,19 +111,10 @@ export default function AdminDashboard() {
     setTierSaving(true);
     setMessage("");
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activeTier: tierKey }),
-      });
-      const data = await res.json();
-      if (data.status === "success") {
-        setActiveTier(tierKey);
-        const found = TIER_BUTTONS.find((t) => t.key === tierKey);
-        setMessage(`✅ Active fare tier set to "${found?.label}" and saved to database.`);
-      } else {
-        setMessage(`❌ Failed to save tier: ${data.message}`);
-      }
+      await adminSetActiveTier(tierKey);
+      setActiveTier(tierKey);
+      const found = TIER_BUTTONS.find((t) => t.key === tierKey);
+      setMessage(`✅ Active fare tier set to "${found?.label}" and saved to database.`);
     } catch {
       setMessage("❌ Could not connect to server to save tier.");
     } finally {
@@ -167,53 +160,34 @@ export default function AdminDashboard() {
       });
 
       const updatedFares = {
-        ...editPlace.fares,                     // keep route / route_label / distance_km
+        ...editPlace.fares,
         emergency_provisional_php: editEmergency === "" ? null : parseFloat(editEmergency),
         tiers,
       };
 
-      // ── Build coords to send ──────────────────────────────────────────────
-      // Always send as plain [lng, lat] array so backend/MongoDB handles it uniformly.
-      // Priority 1: user-edited values in the form (if both lat & lng are valid numbers)
-      // Priority 2: extract from existing place.coords (handles both array + GeoJSON)
-      // Priority 3: null (no coords)
       let coordsToSend = null;
       const latVal = parseFloat(editLat);
       const lngVal = parseFloat(editLng);
       if (editLat !== "" && editLng !== "" && !isNaN(latVal) && !isNaN(lngVal)) {
-        // User has valid lat/lng — always use these (priority 1)
         coordsToSend = [lngVal, latVal];
       } else if (editLat === "" && editLng === "") {
-        // Both fields are blank — preserve existing coords from DB if any
         if (Array.isArray(editPlace.coords) && editPlace.coords.length >= 2) {
           coordsToSend = editPlace.coords;
         } else if (editPlace.coords?.coordinates?.length >= 2) {
           coordsToSend = editPlace.coords.coordinates;
-        } else {
-          coordsToSend = null;
         }
       }
-      // If only one of lat/lng is filled but invalid, send null (don't save partial coords)
 
-      const res  = await fetch(`${BACKEND_URL}/api/admin/places/${editPlace._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fares:    updatedFares,
-          distance: editDist || null,
-          coords:   coordsToSend,
-        }),
+      const updatedPlace = await adminUpdatePlace(editPlace._id, {
+        fares:    updatedFares,
+        distance: editDist || null,
+        coords:   coordsToSend,
       });
-      const data = await res.json();
-      if (data.status === "success") {
-        setPlaces((prev) => prev.map((p) => p._id === editPlace._id ? data.place : p));
-        setEditPlace(null);
-        setMessage(`✅ "${data.place.name}" updated successfully!`);
-      } else {
-        setMessage(`❌ ${data.message}`);
-      }
-    } catch {
-      setMessage("❌ Error saving place");
+      setPlaces((prev) => prev.map((p) => p._id === editPlace._id ? updatedPlace : p));
+      setEditPlace(null);
+      setMessage(`✅ "${updatedPlace.name}" updated successfully!`);
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -224,16 +198,11 @@ export default function AdminDashboard() {
     if (!confirm(`Delete "${place.name}"?`)) return;
     setLoading(true);
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/admin/places/${place._id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.status === "success") {
-        setPlaces((prev) => prev.filter((p) => p._id !== place._id));
-        setMessage(`✅ "${place.name}" deleted.`);
-      } else {
-        setMessage(`❌ ${data.message}`);
-      }
-    } catch {
-      setMessage("❌ Error deleting place");
+      await adminDeletePlace(place._id);
+      setPlaces((prev) => prev.filter((p) => p._id !== place._id));
+      setMessage(`✅ "${place.name}" deleted.`);
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -253,19 +222,18 @@ export default function AdminDashboard() {
         tiers[key] = val === "" || val === null ? null : parseFloat(val);
       });
 
-      // ── Build coords: only send if both lat & lng are valid numbers ──────────
       let coordsToSend = null;
       const latVal = parseFloat(newPlace.lat);
       const lngVal = parseFloat(newPlace.lng);
       if (newPlace.lat !== "" && newPlace.lng !== "" && !isNaN(latVal) && !isNaN(lngVal)) {
-        coordsToSend = [lngVal, latVal]; // MongoDB format: [longitude, latitude]
+        coordsToSend = [lngVal, latVal];
       }
 
-      const payload = {
-        name: newPlace.name.trim(),
+      const createdPlace = await adminAddPlace({
+        name:     newPlace.name.trim(),
         category: newPlace.category,
         distance: newPlace.distance || null,
-        coords: coordsToSend,
+        coords:   coordsToSend,
         fares: {
           route:       newPlace.route       || null,
           route_label: newPlace.route_label || null,
@@ -273,29 +241,19 @@ export default function AdminDashboard() {
           emergency_provisional_php: newPlace.emergency === "" ? null : parseFloat(newPlace.emergency),
           tiers,
         },
-      };
-      const res  = await fetch(`${BACKEND_URL}/api/admin/places`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (data.status === "success") {
-        setPlaces((prev) => [...prev, data.place]);
-        setShowAddModal(false);
-        setNewPlace({
-          name: "", category: "landmark", distance: "",
-    lat: "", lng: "",
-          route: "", route_label: "", distance_km: "",
-          emergency: "",
-          tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
-        });
-        setMessage(`✅ "${data.place.name}" added successfully!`);
-      } else {
-        setMessage(`❌ ${data.message}`);
-      }
-    } catch {
-      setMessage("❌ Error adding place. Check your backend.");
+      setPlaces((prev) => [...prev, createdPlace]);
+      setShowAddModal(false);
+      setNewPlace({
+        name: "", category: "landmark", distance: "",
+        lat: "", lng: "",
+        route: "", route_label: "", distance_km: "",
+        emergency: "",
+        tiers: { "50-59": "", "60-69": "", "70-79": "", "80-89": "", "90-99": "" },
+      });
+      setMessage(`✅ "${createdPlace.name}" added successfully!`);
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }

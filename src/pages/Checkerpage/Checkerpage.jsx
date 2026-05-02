@@ -6,43 +6,38 @@ import { FaCheckCircle, FaMapMarkerAlt, FaEdit, FaSync, FaChevronDown, FaCrossha
 import logoWhite from "../../assets/Logowhite-removebg-preview.png";
 import logoBlack from "../../assets/Logoblack-removebg-preview.png";
 
-import { getAllPlaces } from "../../api/api";
+import { getAllPlaces, calculateFare } from "../../api/api";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
-const OSRM_BASE   = "https://router.project-osrm.org/route/v1/driving";
-
+// ── Passenger types kept here only for the UI dropdown.
+// The authoritative definition (multipliers, labels) now lives on the backend.
 export const PASSENGER_TYPES = [
-  { value: "regular", label: "Regular",               multiplier: 1.00, discountPercent:  0 },
-  { value: "student", label: "Student (Estudyante)",   multiplier: 0.80, discountPercent: 20 },
-  { value: "pwd",     label: "PWD",                   multiplier: 0.80, discountPercent: 20 },
-  { value: "senior",  label: "Senior Citizen",         multiplier: 0.80, discountPercent: 20 },
+  { value: "regular", label: "Regular",               discountPercent:  0 },
+  { value: "student", label: "Student (Estudyante)",  discountPercent: 20 },
+  { value: "pwd",     label: "PWD",                   discountPercent: 20 },
+  { value: "senior",  label: "Senior Citizen",         discountPercent: 20 },
 ];
 
-const applyMultiplier = (baseFare, multiplier) =>
-  baseFare != null ? Math.round(baseFare * multiplier) : null;
+// ── GPS / haversine helper (still needed for the "too close" GPS snap) ─────────
+const getDistanceKmFromCoords = (from, to) => {
+  if (!from || !to || from.length < 2 || to.length < 2) return null;
+  const [lng1, lat1] = from;
+  const [lng2, lat2] = to;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R   = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
-const SHORT_TRIP_FLAT_FARE = 25;   // ₱25 for trips ≤ 2.0 km
-const SHORT_TRIP_MAX_KM    = 2.0;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// OSRM helper — returns actual road distance in km between two [lng,lat] points
-// Returns null if the request fails (caller will fall back to stored distance)
-// ─────────────────────────────────────────────────────────────────────────────
-const getOSRMRoadDistance = async (fromCoords, toCoords) => {
-  if (!fromCoords || !toCoords) return null;
-  try {
-    const url =
-      `${OSRM_BASE}/${fromCoords[0]},${fromCoords[1]};${toCoords[0]},${toCoords[1]}` +
-      `?overview=false`;
-    const res  = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.routes?.length > 0) {
-      // OSRM returns distance in metres; convert to km
-      return data.routes[0].legs[0].distance / 1000;
-    }
-  } catch {
-    // network error — fall through to null
+const getCoords = (place) => {
+  if (!place?.coords) return null;
+  if (Array.isArray(place.coords)) return place.coords;
+  if (place.coords.coordinates && Array.isArray(place.coords.coordinates)) {
+    return place.coords.coordinates;
   }
   return null;
 };
@@ -59,9 +54,6 @@ export default function Checkerpage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
   const [places,   setPlaces]   = useState([]);
-
-  const [activeTier,   setActiveTier]   = useState(null);
-  const [tierLoading,  setTierLoading]  = useState(true);
 
   const [originSaved,       setOriginSaved]       = useState(false);
   const [destinationSaved,  setDestinationSaved]  = useState(false);
@@ -108,7 +100,7 @@ export default function Checkerpage() {
   const [calculating, setCalculating] = useState(false);
 
   useEffect(() => {
-    Promise.all([fetchPlaces(), fetchActiveTier()]);
+    fetchPlaces();
   }, []);
 
   const fetchPlaces = async () => {
@@ -125,23 +117,6 @@ export default function Checkerpage() {
     }
   };
 
-  const fetchActiveTier = async () => {
-    setTierLoading(true);
-    try {
-      const res  = await fetch(`${BACKEND_URL}/api/admin/settings/active-tier`);
-      const data = await res.json();
-      if (data.status === "success" && data.activeTier) {
-        setActiveTier(data.activeTier);
-      } else {
-        setActiveTier("50-59");
-      }
-    } catch {
-      setActiveTier("50-59");
-    } finally {
-      setTierLoading(false);
-    }
-  };
-
   const toggleTheme = () => {
     const next = !isDarkMode;
     setIsDarkMode(next);
@@ -154,114 +129,6 @@ export default function Checkerpage() {
     return places
       .map((p) => p.name)
       .filter((name) => name.toLowerCase().includes(lower));
-  };
-
-  // Extract [lng, lat] coordinates from a place document
-  const getCoords = (place) => {
-    if (!place?.coords) return null;
-    if (Array.isArray(place.coords)) return place.coords;
-    if (place.coords.coordinates && Array.isArray(place.coords.coordinates)) {
-      return place.coords.coordinates;
-    }
-    return null;
-  };
-
-  // Haversine straight-line distance (fallback only)
-  const getDistanceKmFromCoords = (from, to) => {
-    if (!from || !to || from.length < 2 || to.length < 2) return null;
-    const [lng1, lat1] = from;
-    const [lng2, lat2] = to;
-    const toRad = (deg) => (deg * Math.PI) / 180;
-    const R  = 6371;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  // Helper: extract numeric km from a place document
-  const getPlaceKm = (place) => {
-    if (!place) return 0;
-    if (place.fares?.distance_km != null) return parseFloat(place.fares.distance_km) || 0;
-    if (place.distance != null) return parseFloat(place.distance) || 0;
-    return 0;
-  };
-
-  // ── Fare lookup ────────────────────────────────────────────────────────────
-  // roadDistanceKm — actual OSRM road distance passed in from handleCalculate
-  //   • ≤ SHORT_TRIP_MAX_KM  →  flat ₱20 (short trip)
-  //   • > SHORT_TRIP_MAX_KM  →  use the fare stored in MongoDB for this route
-  const getFareForRoute = (origin, destination, roadDistanceKm) => {
-    const origPlace = places.find((p) => p.name === origin);
-    const destPlace = places.find((p) => p.name === destination);
-
-    const tierKey = activeTier ?? "50-59";
-
-    // ── Short-trip check using real road distance ─────────────────────────
-    if (
-      roadDistanceKm != null &&
-      roadDistanceKm > 0.05 &&
-      roadDistanceKm <= SHORT_TRIP_MAX_KM
-    ) {
-      return {
-        activeTier: tierKey,
-        baseFare:   SHORT_TRIP_FLAT_FARE,
-        isShortTripFlat: true,
-        emergency_provisional_php: null,
-        "50-59": SHORT_TRIP_FLAT_FARE,
-        "60-69": SHORT_TRIP_FLAT_FARE,
-        "70-79": SHORT_TRIP_FLAT_FARE,
-        "80-89": SHORT_TRIP_FLAT_FARE,
-        "90-99": SHORT_TRIP_FLAT_FARE,
-        route:       "Short Trip",
-        route_label: `Short Trip ≤ ${SHORT_TRIP_MAX_KM} km (Flat Rate ₱${SHORT_TRIP_FLAT_FARE})`,
-        distance_km: parseFloat(roadDistanceKm.toFixed(2)),
-        distance:    `${roadDistanceKm.toFixed(1)} km`,
-      };
-    }
-
-    // ── Road distance > 2 km — use fare from MongoDB ──────────────────────
-    const origHasFares = !!(origPlace?.fares?.tiers);
-    const destHasFares = !!(destPlace?.fares?.tiers);
-
-    let farePlace = null;
-
-    if (origHasFares && destHasFares) {
-      // Pick the place with the higher stored km (farther from terminal)
-      farePlace = getPlaceKm(origPlace) >= getPlaceKm(destPlace) ? origPlace : destPlace;
-    } else if (origHasFares) {
-      farePlace = origPlace;
-    } else if (destHasFares) {
-      farePlace = destPlace;
-    }
-
-    if (!farePlace) return null;
-
-    const tiers    = farePlace.fares?.tiers ?? {};
-    const baseFare = tiers[tierKey] ?? null;
-
-    return {
-      activeTier: tierKey,
-      baseFare,
-      emergency_provisional_php: farePlace.fares?.emergency_provisional_php ?? null,
-      "50-59": tiers["50-59"] ?? null,
-      "60-69": tiers["60-69"] ?? null,
-      "70-79": tiers["70-79"] ?? null,
-      "80-89": tiers["80-89"] ?? null,
-      "90-99": tiers["90-99"] ?? null,
-      route:       farePlace.fares?.route       ?? null,
-      route_label: farePlace.fares?.route_label ?? farePlace.fares?.fare_basis ?? null,
-      distance_km: roadDistanceKm != null
-        ? parseFloat(roadDistanceKm.toFixed(2))
-        : (farePlace.fares?.distance_km ?? null),
-      distance: roadDistanceKm != null
-        ? `${roadDistanceKm.toFixed(1)} km`
-        : (farePlace.distance ?? null),
-    };
   };
 
   // ── GPS locate ────────────────────────────────────────────────────────────
@@ -299,7 +166,7 @@ export default function Checkerpage() {
       if (nearest) {
         setOriginInput(nearest.name);
         setOriginButton(nearest.name);
-        setOriginSaved(true);
+        setOriginSaved(false);
         setOriginSuggestions([]);
         setLocError("");
       } else {
@@ -340,10 +207,10 @@ export default function Checkerpage() {
     }, MAX_WAIT_MS);
   };
 
-  // ── Calculate fare (async — calls OSRM for real road distance) ────────────
+  // ── Calculate fare — now delegates entirely to the backend ────────────────
   const handleCalculate = async () => {
-    const finalOrigin      = originSaved      ? originButton      : originInput;
-    const finalDestination = destinationSaved ? destinationButton : destinationInput;
+    const finalOrigin      = originInput || originButton;
+    const finalDestination = destinationInput || destinationButton;
 
     if (!finalOrigin || !finalDestination) {
       alert("Mangyaring ilagay ang pinagalingan at paroroonan.");
@@ -364,81 +231,62 @@ export default function Checkerpage() {
       return;
     }
 
-    const origPlace = places.find((p) => p.name === finalOrigin);
-    const destPlace = places.find((p) => p.name === finalDestination);
-    const coordsA   = getCoords(origPlace);
-    const coordsB   = getCoords(destPlace);
-
-    // ── Too-close check (straight-line) ──────────────────────────────────────
-    const geoDist = getDistanceKmFromCoords(coordsA, coordsB);
-    if (geoDist !== null && geoDist >= 0.001 && geoDist <= 0.1) {
-      setNearbyMsg("These places are just across from each other.");
-      return;
-    }
     setNearbyMsg("");
-
-    // ── Get actual road distance from OSRM (MapLibre routing) ────────────────
     setCalculating(true);
-    let roadDistanceKm = null;
 
     try {
-      roadDistanceKm = await getOSRMRoadDistance(coordsA, coordsB);
-    } catch {
-      // OSRM unavailable — will fall back to stored/Haversine below
+      // Backend handles distance via OSRM — we only need origin, destination, passengerType
+      const result = await calculateFare(finalOrigin, finalDestination, passengerType);
+
+      navigate(
+        `/result?origin=${encodeURIComponent(result.origin)}&destination=${encodeURIComponent(result.destination)}`,
+        {
+          state: {
+            origin:      result.origin,
+            destination: result.destination,
+            fareInfo:    result.fareInfo,   // full fare object with tiers, discount, distance
+          },
+        }
+      );
+    } catch (err) {
+      setCalculating(false);
+      if (err.tooClose) {
+        setNearbyMsg("Magkatabi lang ang mga lugar na pinili. Subukang mas malayong destinasyon.");
+      } else {
+        alert(err.message || "Hindi makalkula ang pamasahe. Subukang muli.");
+      }
     }
-
-    // Fallback: use the stored fares.distance_km (max of origin/destination)
-    // or straight-line distance when OSRM is unavailable
-    if (roadDistanceKm === null) {
-      const origKm = getPlaceKm(origPlace);
-      const destKm = getPlaceKm(destPlace);
-      const maxStoredKm = Math.max(origKm, destKm);
-      roadDistanceKm = maxStoredKm > 0
-        ? maxStoredKm
-        : (geoDist ?? null);
-    }
-
-    setCalculating(false);
-
-    const routeData         = getFareForRoute(finalOrigin, finalDestination, roadDistanceKm);
-    const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
-
-    const baseFare            = routeData?.baseFare ?? null;
-    const effectiveMultiplier = selectedPassenger.multiplier;
-    const finalFare           = applyMultiplier(baseFare, effectiveMultiplier);
-    const fareDecrease        = (baseFare != null && finalFare != null) ? baseFare - finalFare : null;
-
-    const fareInfo = {
-      ...routeData,
-      rideType:        passengerType,
-      rideLabel:       selectedPassenger.label,
-      multiplier:      selectedPassenger.multiplier,
-      discountPercent: selectedPassenger.discountPercent,
-      finalFare,
-      fareIncrease: -fareDecrease,
-    };
-
-    navigate("/result", {
-      state: { origin: finalOrigin, destination: finalDestination, fareInfo },
-    });
   };
 
   const openModal  = (type) => { setModalType(type); setSearchTerm(""); setIsModalOpen(true); };
   const closeModal = () => setIsModalOpen(false);
 
   const handleSetLocation = (loc) => {
-    if (modalType === "origin") { setOriginButton(loc); setOriginSaved(true); }
-    else { setDestinationButton(loc); setDestinationSaved(true); }
+    if (modalType === "origin") {
+      setOriginInput(loc);
+      setOriginButton(loc);
+      setOriginSaved(false);
+    } else {
+      setDestinationInput(loc);
+      setDestinationButton(loc);
+      setDestinationSaved(false);
+    }
     closeModal();
   };
 
   const selectSuggestion = (type, name) => {
     if (type === "origin") {
-      setOriginInput(name); setOriginButton(name); setOriginSaved(true);
-      setOriginSuggestions([]); setOriginActiveIndex(-1);
+      setOriginInput(name);
+      setOriginButton(name);
+      setOriginSaved(false);
+      setOriginSuggestions([]);
+      setOriginActiveIndex(-1);
     } else {
-      setDestinationInput(name); setDestinationButton(name); setDestinationSaved(true);
-      setDestinationSuggestions([]); setDestinationActiveIndex(-1);
+      setDestinationInput(name);
+      setDestinationButton(name);
+      setDestinationSaved(false);
+      setDestinationSuggestions([]);
+      setDestinationActiveIndex(-1);
     }
   };
 
@@ -472,7 +320,7 @@ export default function Checkerpage() {
 
   const selectedPassenger = PASSENGER_TYPES.find((p) => p.value === passengerType);
 
-  if (loading || tierLoading) {
+  if (loading) {
     return (
       <div className={`tariff-page ${isDarkMode ? "dark-mode" : "light-mode"}`}>
         <div className="loading-screen">
