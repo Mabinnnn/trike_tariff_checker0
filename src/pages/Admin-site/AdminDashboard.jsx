@@ -8,6 +8,7 @@ import {
   adminUpdatePlace,
   adminDeletePlace,
   adminAddPlace,
+  adminVerifyGoogleToken,
 } from "../../api/api";
 
 // ── NEW: tier keys now match fares.tiers keys in MongoDB ─────────────────────
@@ -262,7 +263,7 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     sessionStorage.removeItem("adminLoggedIn");
-    sessionStorage.removeItem("adminGmailToken");
+    sessionStorage.removeItem("adminJwt");
     sessionStorage.removeItem("adminGmailUser");
     disconnectGmail();
     navigate("/");
@@ -287,49 +288,32 @@ export default function AdminDashboard() {
 useEffect(() => {
   const hash = window.location.hash.substring(1);
   const params = new URLSearchParams(hash);
-  const token = params.get("access_token");
+  const googleAccessToken = params.get("access_token");
 
-  if (!token) return;
+  if (!googleAccessToken) return;
 
+  // Remove token from URL immediately so it is not visible or replayable
   window.history.replaceState(null, "", window.location.pathname);
+  adminVerifyGoogleToken(googleAccessToken)
+    .then(({ token, email }) => {
+      // Store the backend-issued JWT — sent with every admin API call
+      sessionStorage.setItem("adminJwt", token);
+      sessionStorage.setItem("adminLoggedIn", "true");
+      sessionStorage.setItem("adminGmailUser", email);
 
-  fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then((r) => r.json())
-    .then((data) => {
-      const email = (data.email || "").toLowerCase().trim();
-
-      // ✅ ADD ALL ADMINS HERE
-      const ALLOWED_ADMINS = [
-        "estrabelaedison8@gmail.com",
-        "marvinlarosa28@gmail.com",
-        "keanjayvee.gito@sorsu.edu.ph",
-        "triketariffcheckeradmin@gmail.com"
-      ];
-
-      if (ALLOWED_ADMINS.includes(email)) {
-
-        setGmailToken(token);
-        setGmailUser(data.email);
-        setGmailError("");
-        setIsLoggedIn(true);
-        sessionStorage.setItem("adminLoggedIn", "true");
-        sessionStorage.setItem("adminGmailToken", token);
-        sessionStorage.setItem("adminGmailUser", data.email);
-
-      } else {
-
-        setGmailError(
-          `⛔ Access denied. "${data.email}" is not an authorized admin account.`
-        );
-
-        setGmailToken(null);
-        setGmailUser("");
-      }
+      setGmailToken(googleAccessToken); // kept only for Gmail send feature
+      setGmailUser(email);
+      setGmailError("");
+      setIsLoggedIn(true);
     })
-    .catch(() => {
-      setGmailError("❌ Could not verify Gmail account. Please try again.");
+    .catch((err) => {
+      // 403 = not in admins collection | 401 = Google token invalid/expired
+      setGmailError(err.message || "⛔ Access denied. Please try again.");
+      setGmailToken(null);
+      setGmailUser("");
+      sessionStorage.removeItem("adminJwt");
+      sessionStorage.removeItem("adminLoggedIn");
+      sessionStorage.removeItem("adminGmailUser");
     });
 
 }, []);
